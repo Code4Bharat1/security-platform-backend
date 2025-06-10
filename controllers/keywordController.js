@@ -53,7 +53,7 @@ export const analyzeKeyword = async (req, res) => {
   if (!url) {
     return res.status(400).json({ error: "URL is required" });
   }
-
+       
   try {
     const response = await fetch(url);
     const html = await response.text();

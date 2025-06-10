@@ -1,4 +1,5 @@
-
+import dotenv from 'dotenv';
+dotenv.config();
 import express from "express";
 import dnsRoutes from './routers/dnsRouter.js';
 import wafRoutes from './routers/wafRouter.js';
@@ -7,7 +8,6 @@ import sharePointRoutes from './routers/sharePointRouter.js';
 import wordpressRoutes from './routers/wordpressRouter.js';
 import sitemapRoutes from './routers/sitemapRouter.js';
 import brokenlinkRoutes from './routers/brokenLinkRouter.js';
-import dotenv from "dotenv";
 import cors from "cors";
 import connectDB from "./utils/db.js";
 import keywordRoutes from "./routers/keyword.router.js";
@@ -26,25 +26,30 @@ import reverseDNSRoutes from './routers/reverseDNSRoutes.js';
 import csrfRoutes from './routers/csrfRoutes.js';
 import regexRoutes from './routers/regexRoutes.js';
 import sessionFixationRoutes from './routers/sessionFixationRoutes.js';
-// Load environment variables from .env file
-dotenv.config();
+import whoisRoutes from './routers/whoisRouter.js';
+import subdomainRoutes from './routers/subdomainRouter.js';
+import xssTesterRoutes from './routers/xssTesterRouter.js';
+import secretScanRoutes from './routers/secretScanRouter.js';
+import openRedirectRoutes from './routers/openRedirectRouter.js';
+import codeObfuscationRoutes from './routers/codeObfuscationRouter.js';
+import analysisRoutes from './routers/analysisRouter.js';
+import sonarRoutes from './routers/sonarRouter.js';
+import analyzeCodeRoutes from './routers/analyzeCodeRouter.js';
+import apiTestRoutes from './routers/apiTestRouter.js';
+import fingerprintRoutes from './routers/fingerprintRouter.js';
+import bruteForceRoutes from './routers/bruteForceRouter.js';
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Replace your current cors() line with:
-app.use(
-  cors({
-    origin: [
-      "http://localhost:3000",
-      "http://localhost:3001",
-      "http://127.0.0.1:3000",
-    ],
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
+app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use((req, res, next) => {
+  console.log(`[${req.method}] ${req.url}`);
+  next();
+});
 
 app.use("/api/keyword", keywordRoutes);
 app.use("/api/speed", speedRoutes);
@@ -69,6 +74,18 @@ app.use('/api/sharepoint', sharePointRoutes);
 app.use('/api/wordpress', wordpressRoutes);
 app.use('/api/sitemap', sitemapRoutes);
 app.use('/api/brokenlink', brokenlinkRoutes);
+app.use('/api/whois',whoisRoutes);
+app.use('/api/subdomain',subdomainRoutes);
+app.use('/api/xssTester',xssTesterRoutes);
+app.use('/api/secretKeyScanner', secretScanRoutes);
+app.use('/api/openRedirectTester', openRedirectRoutes);
+app.use('/api/code', codeObfuscationRoutes);
+app.use('/api/analysis', analysisRoutes);
+app.use('/api/sonar', sonarRoutes);
+app.use('/api/analyze', analyzeCodeRoutes);
+app.use('/api/apiTest', apiTestRoutes);
+app.use('/api/fingerprint', fingerprintRoutes);
+app.use('/api/bruteForce', bruteForceRoutes);
 
 connectDB().then(() => {
   app.listen(PORT, () => {
