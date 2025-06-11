@@ -1,6 +1,6 @@
 import express from 'express';
+import { scanWordPress } from '../controllers/wordpressController.js';
 
-import { scanWordPress } from '../controller/wordpressController.js';
 const router = express.Router();
 
 router.post('/wordpress-scan', scanWordPress);

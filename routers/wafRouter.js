@@ -1,6 +1,7 @@
 // routers/wafRouter.js
 import express from 'express';
-import { detectWAF } from '../controller/wafController.js'; // Corrected path
+
+import { detectWAF } from '../controllers/wafController.js'; 
 const router = express.Router();
 
 router.post('/waf-scan', detectWAF);

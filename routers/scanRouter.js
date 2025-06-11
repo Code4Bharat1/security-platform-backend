@@ -1,6 +1,6 @@
 // routers/scanRouter.js
 import express from 'express';
-import { runScan } from '../controller/scanController.js'; // make sure path is correct
+import { runScan } from '../controllers/scanController.js'; // make sure path is correct
 
 const router = express.Router();
 

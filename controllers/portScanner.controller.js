@@ -5,7 +5,7 @@ const scanPorts = async (host, startPort, endPort) => {
   const ports = {};
   const total = endPort - startPort + 1;
   let openCount = 0;
-
+         
   for (let port = startPort; port <= endPort; port++) {
     const open = Math.random() < 0.2; // 20% chance open
     if (open) openCount++;
@@ -20,7 +20,7 @@ const scanPorts = async (host, startPort, endPort) => {
         : `Port ${port} is closed.`,
     };
   }
-
+    
   // Risk assessment (simplified)
   let riskAssessment = "Low";
   if (openCount > total * 0.3) riskAssessment = "High";

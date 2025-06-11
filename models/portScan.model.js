@@ -7,7 +7,7 @@ const portDetailSchema = new mongoose.Schema({
   risk: String,
   description: String,
 });
-
+                   
 const scanResultSchema = new mongoose.Schema({
   host: { type: String, required: true },
   scanTime: { type: Date, default: Date.now },
