@@ -38,12 +38,17 @@ import analyzeCodeRoutes from './routers/analyzeCodeRouter.js';
 import apiTestRoutes from './routers/apiTestRouter.js';
 import fingerprintRoutes from './routers/fingerprintRouter.js';
 import bruteForceRoutes from './routers/bruteForceRouter.js';
+import brokenAccessRoutes from './routers/brokenAccessRouter.js';
+import ssrfRoutes from './routers/ssrfRouter.js';
+import sensitiveFileRoutes from './routers/sensitiveFileRouter.js';
+import aiRoutes from './routers/aiRouter.js';
+import aiHeaderRoutes from './routers/aiHeaderRouter.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Replace your current cors() line with:
-app.use(cors());
+app.use(cors({ origin: 'http://localhost:3000' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use((req, res, next) => {
@@ -86,6 +91,12 @@ app.use('/api/analyze', analyzeCodeRoutes);
 app.use('/api/apiTest', apiTestRoutes);
 app.use('/api/fingerprint', fingerprintRoutes);
 app.use('/api/bruteForce', bruteForceRoutes);
+app.use('/api/broken-access-control', brokenAccessRoutes);
+app.use('/api/ssrf-checker', ssrfRoutes);
+app.use('/api/sensitive-files', sensitiveFileRoutes);
+app.use('/api/ai' , aiRoutes);
+app.use('/api/aiheaders', aiHeaderRoutes);
+
 
 connectDB().then(() => {
   app.listen(PORT, () => {
