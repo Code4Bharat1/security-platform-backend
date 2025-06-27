@@ -9,3 +9,5 @@ router.get('/reports', getBrokenAccessReports);
 router.get('/scan-history', getScanHistory);
 router.delete('/delete/:id',deleteScanById);
 export default router;
+
+

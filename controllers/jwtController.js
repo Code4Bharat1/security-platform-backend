@@ -1,6 +1,5 @@
-import JwtToken from "../models/JwtToken.js";
 import jwt from "jsonwebtoken";
-
+import JwtToken from "../models/JwtToken.js";
 export const saveToken = async (req, res) => {
   try {
     const { token, secret } = req.body;
@@ -22,7 +21,10 @@ export const saveToken = async (req, res) => {
     await savedToken.save();
 
     res.status(201).json({ message: "Token saved", data: savedToken });
-  } catch (error) {
+  } 
+  
+ catch (error) {
+    console.error(" Error saving JWT token:", error); 
     res.status(500).json({ error: error.message });
   }
 };

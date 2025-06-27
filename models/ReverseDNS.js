@@ -12,3 +12,4 @@ const ReverseDNSchema = new mongoose.Schema({
 const ReverseDNS = mongoose.models.ReverseDNS || mongoose.model('ReverseDNS', ReverseDNSchema);
 
 export default ReverseDNS;
+           

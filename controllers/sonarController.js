@@ -7,7 +7,7 @@ export const analyzeCode = async (req, res) => {
   if (!code || typeof code !== 'string') {
     return res.status(400).json({ error: 'Invalid or missing code.' });
   }
-
+       
   try {
     const issues = [];
     const lines = code.split('\n');

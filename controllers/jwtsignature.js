@@ -12,7 +12,7 @@ export const validateJWT = async (req, res) => {
     console.log("❌ Missing token or secret");
     return res.status(400).json({ error: "Token and secret are required" });
   }
-
+           
   // Trim whitespace
   const cleanToken = token.trim();
   const cleanSecret = secret.trim();
