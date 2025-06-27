@@ -19,6 +19,17 @@ function analyzePayload(payload) {
   return issues;
 }
 
+export async function getAllTokens(req, res) {
+  try {
+    const tokens = await OAuthToken.find().sort({ _id: -1 }); // latest first
+    return res.json(tokens);
+  } catch (error) {
+    console.error('getAllTokens error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+
 export async function inspectToken(req, res) {
   try {
     const { token } = req.body;

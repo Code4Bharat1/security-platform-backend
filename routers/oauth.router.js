@@ -1,8 +1,9 @@
 import express from 'express';
-import { inspectToken } from '../controllers/oauthTokenController.js';
+import { login, signup } from '../controllers/oauthController.js';
 
 const router = express.Router();
 
-router.post('/oauthTokenInspector', inspectToken);
+router.post("/login", login);
+router.post("/signup", signup);
 
 export default router;

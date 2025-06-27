@@ -1,15 +1,10 @@
 import mongoose from 'mongoose';
 
 const OAuthTokenSchema = new mongoose.Schema({
-  token: { type: String, required: true },
-  payload: { type: Object, required: true },
-  issues: { type: [String], default: [] },
-  createdAt: { type: Date, default: Date.now },
-
-  // New field: timespan in milliseconds
-  timespan: { type: Number, default: 0 },
+  token: String,
+  payload: Object,
+  issues: [String],
+  timestamp: { type: Date, default: Date.now }
 });
 
-const OAuthToken = mongoose.model('OAuthToken', OAuthTokenSchema);
-
-export default OAuthToken;
+export default mongoose.model('OAuthToken', OAuthTokenSchema);
