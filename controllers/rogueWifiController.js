@@ -1,35 +1,24 @@
-import { exec } from "child_process";
+import RogueWiFi from "../models/RogueWiFi.js";
 
-export const scanRogueWifi = (req, res) => {
-  exec("iwlist scan | grep 'ESSID'", (err, stdout, stderr) => {
-    if (err || stderr) {
-      return res.status(500).json({ error: "WiFi scan failed." });
-    }
+const suspiciousSSIDs = ["FreeWiFi", "OpenNet", "PublicNetwork"];
+const rogueIPs = ["192.168.0.100", "10.0.0.66"];
 
-    const ssids = stdout
-      .split("\n")
-      .map((line) => line.match(/ESSID:"(.+?)"/)?.[1])
-      .filter(Boolean);
+export const scanRogueWiFi = async (req, res) => {
+  const { input } = req.body;
 
-    const count = {};
-    const duplicates = [];
+  let status = "safe";
+  let message = "No suspicious activity detected.";
 
-    ssids.forEach((ssid) => {
-      count[ssid] = (count[ssid] || 0) + 1;
-      if (count[ssid] === 2) duplicates.push(ssid);
-    });
+  if (suspiciousSSIDs.includes(input)) {
+    status = "suspicious";
+    message = "This SSID is commonly used in rogue networks.";
+  } else if (rogueIPs.includes(input)) {
+    status = "rogue";
+    message = "This IP is flagged as a rogue access point.";
+  }
 
-    if (duplicates.length > 0) {
-      return res.json({
-        status: "⚠️ Rogue WiFi Detected!",
-        duplicates,
-        message: `Duplicate SSIDs found: ${duplicates.join(", ")}`,
-      });
-    } else {
-      return res.json({
-        status: "✅ Safe",
-        message: "No rogue WiFi networks found.",
-      });
-    }
-  });
+  const result = new RogueWiFi({ input, status, message });
+  await result.save();
+
+  res.json({ input, status, message, savedAt: result.timestamp });
 };

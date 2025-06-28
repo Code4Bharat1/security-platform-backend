@@ -1,12 +1,14 @@
-// server.js (already using ES Modules)
+// server.js (ES Modules)
+
 import dotenv from 'dotenv';
 dotenv.config();
 
 import express from 'express';
 import cors from 'cors';
+import mongoose from 'mongoose';
 import connectDB from './utils/db.js';
 
-// Importing all routers
+// Tool Routes
 import dnsRoutes from './routers/dnsRouter.js';
 import wafRoutes from './routers/wafRouter.js';
 import scanRoutes from './routers/scanRouter.js';
@@ -47,10 +49,35 @@ import ssrfRoutes from './routers/ssrfRouter.js';
 import sensitiveFileRoutes from './routers/sensitiveFileRouter.js';
 import aiRoutes from './routers/aiRouter.js';
 import aiHeaderRoutes from './routers/aiHeaderRouter.js';
+import rogueWiFiRoutes from './routers/rogueWiFiRoutes.js';
+import linkDetectorRoutes from './routers/linkDetectorRouter.js';
+import sqliScannerRoutes from './routers/sqliScannerRouter.js';
+import hashGeneratorRouter from './routers/hashGeneratorRouter.js';
+import johnRoutes from "./routers/johnRouter.js";
+import secureCryptRoutes from "./routers/secureCryptRouter.js";
+import nexposeRoutes from './routers/nexposeRouter.js';
+import mdrMonitorRouter from "./routers/mdrMonitorRouter.js";
+import folderThreatScanRoutes from './routers/folderThreatScanRouter.js';
+import usbScannerRoutes from './routers/usbScannerRoutes.js';
+import dataLeakRoutes from './routers/dataLeakRoutes.js'; 
+import socialPrivacyRoutes from "./routers/socialPrivacyRoutes.js";
+import fakeSoftwareRoutes from "./routers/fakeSoftwareRouter.js";
+import whatsappPrivacyRoutes from './routers/whatsappPrivacyRouter.js';
+import emailAttachmentRoutes from "./routers/emailAttachmentRouter.js";
+import ipInfoRouter from './routers/ipInfoRouter.js';
+import thirdPartyPermissionRoutes from "./routers/thirdPartyPermissionRouter.js";
+import portActivityRouter from "./routers/portActivityRouter.js";
+
+
+
+
+
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -59,7 +86,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Mount all routes
+// DB Connection
+await connectDB(); // ✅ uses mongoose.connect() inside utils/db.js
+
+// API Routes Mounting
 app.use('/api/keyword', keywordRoutes);
 app.use('/api/speed', speedRoutes);
 app.use('/api/meta', metaAnalyzeRoutes);
@@ -95,11 +125,32 @@ app.use('/api/analyze', analyzeCodeRoutes);
 app.use('/api/apiTest', apiTestRoutes);
 app.use('/api/fingerprint', fingerprintRoutes);
 app.use('/api/bruteForce', bruteForceRoutes);
+app.use('/api/brokenAccess', brokenAccessRoutes);
+app.use('/api/ssrf', ssrfRoutes);
+app.use('/api/sensitiveFile', sensitiveFileRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/aiHeader', aiHeaderRoutes);
+app.use('/api/rogue-wifi', rogueWiFiRoutes);
+app.use('/api/link-detector', linkDetectorRoutes);
+app.use('/api/sqli', sqliScannerRoutes);
+app.use('/api', hashGeneratorRouter);
+app.use('/api/john-the-ripper', johnRoutes);
+app.use("/api/securecrypt", secureCryptRoutes); 
+app.use('/api/nexpose', nexposeRoutes);
+app.use("/api/mdr-monitor", mdrMonitorRouter);
+app.use("/api/folder-scan", folderThreatScanRoutes); 
+app.use('/api/usb-scan', usbScannerRoutes);
+app.use("/api/data-leak", dataLeakRoutes);
+app.use("/api", socialPrivacyRoutes);  
+app.use("/api", fakeSoftwareRoutes);
+app.use("/api/whatsapp-privacy", whatsappPrivacyRoutes);
+app.use("/api/email-attachment", emailAttachmentRoutes); 
+app.use('/api/ip-info', ipInfoRouter);
+app.use("/api", thirdPartyPermissionRoutes);
+app.use("/api", portActivityRouter);
 
-// Start server after DB connected
-connectDB().then(() => {
-  app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-  });
 
+// Start Server
+app.listen(PORT, () => {
+  console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
