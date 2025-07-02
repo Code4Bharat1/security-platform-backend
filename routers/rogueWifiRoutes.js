@@ -1,5 +1,5 @@
 import express from "express";
-import { scanRogueWiFi } from "../controllers/rogueWiFiController.js";
+import { scanRogueWiFi } from "../controllers/rogueWifiController.js";
 
 const router = express.Router();
 
