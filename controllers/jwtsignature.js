@@ -105,9 +105,9 @@ export const validateJWT = async (req, res) => {
     // Try to decode without verification to see the token content
     try {
       const decoded = jwt.decode(cleanToken, { complete: true });
-      console.log("🔍 Token decoded without verification:");
-      console.log("Header:", JSON.stringify(decoded.header, null, 2));
-      console.log("Payload:", JSON.stringify(decoded.payload, null, 2));
+      // console.log("🔍 Token decoded without verification:");
+      // console.log("Header:", JSON.stringify(decoded.header, null, 2));
+      // .log("Payload:", JSON.stringify(decoded.payload, null, 2));
     } catch (decodeErr) {
       console.error("❌ Cannot even decode token:", decodeErr.message);
     }
