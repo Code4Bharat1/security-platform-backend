@@ -49,7 +49,7 @@ import ssrfRoutes from './routers/ssrfRouter.js';
 import sensitiveFileRoutes from './routers/sensitiveFileRouter.js';
 import aiRoutes from './routers/aiRouter.js';
 import aiHeaderRoutes from './routers/aiHeaderRouter.js';
-import rogueWiFiRoutes from './routers/rogueWiFiRoutes.js';
+import rogueWiFiRoutes from './routers/rogueWifiRoutes.js';
 import linkDetectorRoutes from './routers/linkDetectorRouter.js';
 import sqliScannerRoutes from './routers/sqliScannerRouter.js';
 import hashGeneratorRouter from './routers/hashGeneratorRouter.js';
