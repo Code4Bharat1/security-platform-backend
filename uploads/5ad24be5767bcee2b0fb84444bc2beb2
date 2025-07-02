@@ -1,0 +1,9 @@
+def is_file_malicious(file_content):
+    malicious_keywords = [
+        "bit.ly", "tinyurl", ".exe", ".bat", "disable antivirus", 
+        "system_patch", "del C:\\Windows\\System32", "@echo off", "crack"
+    ]
+    for keyword in malicious_keywords:
+        if keyword.lower() in file_content.lower():
+            return True, keyword
+    return False, None

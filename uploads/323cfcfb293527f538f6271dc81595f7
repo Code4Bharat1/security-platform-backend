@@ -1,0 +1,4 @@
+malicious_keywords = [
+    "bit.ly", "tinyurl", ".exe", ".bat", "disable antivirus", 
+    "system_patch", "del C:\\Windows\\System32", "@echo off", "crack"
+]
