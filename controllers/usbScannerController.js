@@ -1,33 +1,56 @@
-import UsbScanResult from "../models/usbScanResult.js";
+// usbScanController.js
+import multer from "multer";
+import crypto from "crypto";
 
-const suspiciousPatterns = [".exe", ".bat", ".scr", "autorun.inf", "malware", "virus"];
+// Multer in-memory storage
+const storage = multer.memoryStorage();
+const upload = multer({ storage }).single("file");
 
-export const scanUSB = async (req, res) => {
-  try {
-    const { deviceName, files } = req.body;
+// Suspicious patterns and known malware hashes
+const suspiciousPatterns = [
+  ".exe", ".bat", ".scr", ".cmd", ".pif", ".com", ".vbs", ".js", ".jar",
+  "autorun.inf", "malware", "virus", "trojan", "worm", "ransom", "spyware"
+];
 
-    if (!deviceName || !Array.isArray(files)) {
-      return res.status(400).json({ message: "Invalid input" });
+const knownMalwareHashes = new Set([
+  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+]);
+
+// Generate SHA-256 hash
+function generateHash(buffer) {
+  return crypto.createHash("sha256").update(buffer).digest("hex");
+}
+
+// Controller function
+export const scanUSB = (req, res) => {
+  upload(req, res, (err) => {
+    if (err || !req.file) {
+      return res.status(400).json({ message: "File upload failed or missing file." });
     }
 
-    const suspiciousFiles = files.filter(file =>
-      suspiciousPatterns.some(pattern => file.toLowerCase().includes(pattern))
+    const file = req.file;
+    const fileName = file.originalname.toLowerCase();
+    const fileBuffer = file.buffer;
+
+    const matchedPatterns = suspiciousPatterns.filter(pattern =>
+      fileName.includes(pattern)
     );
 
-    const result = new UsbScanResult({
-      deviceName,
-      totalFilesScanned: files.length,
-      suspiciousFiles,
-    });
+    const fileHash = generateHash(fileBuffer);
+    const malwareDetected = knownMalwareHashes.has(fileHash);
 
-    await result.save();
+    const suspiciousFiles = (matchedPatterns.length > 0 || malwareDetected) ? [{
+      file: file.originalname,
+      matchedPatterns,
+      fileHash,
+      malwareDetected
+    }] : [];
 
     res.status(200).json({
-      message: "USB Scan Complete",
-      totalFilesScanned: files.length,
-      suspiciousFiles,
+      message: "Scan complete",
+      totalFilesScanned: 1,
+      suspiciousCount: suspiciousFiles.length,
+      suspiciousFiles
     });
-  } catch (error) {
-    res.status(500).json({ message: "Scan failed", error: error.message });
-  }
+  });
 };

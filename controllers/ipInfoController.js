@@ -1,36 +1,49 @@
-// controllers/ipInfoController.js
-import fetch from 'node-fetch'; // Use this if Node < 18
+import express from 'express';
+import fetch from 'node-fetch';
+import ipaddr from 'ipaddr.js';
+import winston from 'winston';
+//import './routers/ipInfoRouter.js';
+
+const logger = winston.createLogger({
+  level: process.env.NODE_ENV === 'production' ? 'error' : 'debug',
+  transports: [
+    new winston.transports.Console()
+  ]
+});
+
 
 export const getIpInfo = async (req, res) => {
   const { ip } = req.body;
 
-  if (!ip) {
-    return res.status(400).json({ success: false, message: "❌ IP address is required." });
+  // Use ipaddr.js for robust IP address validation (IPv4 and IPv6)
+  if (!ip || !ipaddr.isValid(ip)) {
+    return res.status(400).json({ error: "A valid IP address is required." });
   }
+  console.log("🔥 Route hit with IP:", req.body.ip);
 
   try {
-    const response = await fetch(`https://ipapi.co/${ip}/json/`);
+    const response = await fetch(`https://ipwho.is/${ip}`);
+    // const response = await fetch(`https://ipapi.co/${ip}/json/`);
     const data = await response.json();
-
-    if (data.error) {
-      return res.status(404).json({ success: false, message: "❌ Invalid IP address." });
+    
+    if (!response.ok || data.error) {
+      return res.status(404).json({ error: "Invalid IP address or not found." });
     }
 
-    res.status(200).json({
-      success: true,
-      data: {
-        ip: data.ip,
-        city: data.city,
-        region: data.region,
-        country: data.country_name,
-        postal: data.postal,
-        timezone: data.timezone,
-        org: data.org,
-        asn: data.asn
-      }
+    res.json({
+      ip: data.ip || "N/A",
+      country: data.country_name || "N/A",
+      city: data.city || "N/A",
+      isp: data.org || "N/A",
+      // org: data.org || "N/A", // Remove this line if org and isp are the same
+      latitude: data.latitude || "N/A",
+      longitude: data.longitude || "N/A",
     });
-  } catch (err) {
-    console.error("IP Lookup Error:", err);
-    res.status(500).json({ success: false, message: "❌ Server error while fetching IP info." });
+  } catch (error) {
+    logger.error(`Fetch error: ${error.message}`, { error });
+    res.status(500).json({ error: "Server error while fetching IP info." });
   }
 };
+
+//const PORT = process.env.PORT || 4180;
+
