@@ -3,7 +3,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import express from 'express';
+import express, { Router } from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
 import connectDB from './utils/db.js';
@@ -43,7 +43,7 @@ import sonarRoutes from './routers/sonarRouter.js';
 import analyzeCodeRoutes from './routers/analyzeCodeRouter.js';
 import apiTestRoutes from './routers/apiTestRouter.js';
 import fingerprintRoutes from './routers/fingerprintRouter.js';
-import bruteForceRoutes from './routers/bruteForceRouter.js';
+import johnRouter from './routers/jhon-the-ripperRouter.js';
 import brokenAccessRoutes from './routers/brokenAccessRouter.js';
 import ssrfRoutes from './routers/ssrfRouter.js';
 import sensitiveFileRoutes from './routers/sensitiveFileRouter.js';
@@ -53,23 +53,21 @@ import rogueWiFiRoutes from './routers/rogueWifiRoutes.js';
 import linkDetectorRoutes from './routers/linkDetectorRouter.js';
 import sqliScannerRoutes from './routers/sqliScannerRouter.js';
 import hashGeneratorRouter from './routers/hashGeneratorRouter.js';
-import johnRoutes from "./routers/johnRouter.js";
-import secureCryptRoutes from "./routers/secureCryptRouter.js";
 import nexposeRoutes from './routers/nexposeRouter.js';
 import mdrMonitorRouter from "./routers/mdrMonitorRouter.js";
 import folderThreatScanRoutes from './routers/folderThreatScanRouter.js';
-import usbScannerRoutes from './routers/usbScannerRoutes.js';
+import  scanUSBRoutes  from "./routers/usbScannerRoutes.js";
 import dataLeakRoutes from './routers/dataLeakRoutes.js'; 
 import socialPrivacyRoutes from "./routers/socialPrivacyRoutes.js";
 import fakeSoftwareRoutes from "./routers/fakeSoftwareRouter.js";
 import whatsappPrivacyRoutes from './routers/whatsappPrivacyRouter.js';
 import emailAttachmentRoutes from "./routers/emailAttachmentRouter.js";
-import ipInfoRouter from './routers/ipInfoRouter.js';
+import ipInfoRoutes from "./routers/ipInfoRouter.js";
 import thirdPartyPermissionRoutes from "./routers/thirdPartyPermissionRouter.js";
 import portActivityRouter from "./routers/portActivityRouter.js";
-import qrRoutes from './routers/qrRoute.js'; 
-
-
+import secureCryptRoutes from "./routers/secureCryptRouter.js";
+import weboptimizer from './routers/weboptimizer-Router.js'
+import helmet from 'helmet';
 
 
 
@@ -86,6 +84,24 @@ app.use((req, res, next) => {
   next();
 });
 
+//helmet for security headers
+app.use(
+  helmet.contentSecurityPolicy({
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      fontSrc: ["'self'"],
+      imgSrc: ["'self'", "data:"],
+      connectSrc: [
+        "'self'",
+        'http://localhost:4180', // 👈 Allow local API
+        'https://zypher-api.code4bharat.com' // 👈 If needed
+      ],
+      objectSrc: ["'none'"]
+    }
+  })
+);
 // DB Connection
 await connectDB(); // ✅ uses mongoose.connect() inside utils/db.js
 
@@ -124,7 +140,7 @@ app.use('/api/sonar', sonarRoutes);
 app.use('/api/analyze', analyzeCodeRoutes);
 app.use('/api/apiTest', apiTestRoutes);
 app.use('/api/fingerprint', fingerprintRoutes);
-app.use('/api/bruteForce', bruteForceRoutes);
+app.use('/api/john', johnRouter);
 app.use('/api/brokenAccess', brokenAccessRoutes);
 app.use('/api/ssrf', ssrfRoutes);
 app.use('/api/sensitiveFile', sensitiveFileRoutes);
@@ -134,22 +150,21 @@ app.use('/api/rogue-wifi', rogueWiFiRoutes);
 app.use('/api/link-detector', linkDetectorRoutes);
 app.use('/api/sqli', sqliScannerRoutes);
 app.use('/api', hashGeneratorRouter);
-app.use('/api/john-the-ripper', johnRoutes);
 app.use("/api/securecrypt", secureCryptRoutes); 
 app.use('/api/nexpose', nexposeRoutes);
 app.use("/api/mdr-monitor", mdrMonitorRouter);
 app.use("/api/folder-scan", folderThreatScanRoutes); 
-app.use('/api/usb-scan', usbScannerRoutes);
+app.use("/api/scan-usb", scanUSBRoutes);
 app.use("/api/data-leak", dataLeakRoutes);
 app.use("/api", socialPrivacyRoutes);  
 app.use("/api", fakeSoftwareRoutes);
 app.use("/api/whatsapp-privacy", whatsappPrivacyRoutes);
 app.use("/api/email-attachment", emailAttachmentRoutes); 
-app.use('/api/ip-info', ipInfoRouter);
+app.use("/api/ipinfo", ipInfoRoutes);
 app.use("/api", thirdPartyPermissionRoutes);
 app.use("/api", portActivityRouter);
-app.use('/api/qr', qrRoutes);
-app.use('/uploads', express.static('uploads'));
+app.use("/api/website-optimization", weboptimizer);
+
 
 
 // Start Server
