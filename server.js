@@ -67,7 +67,7 @@ import emailAttachmentRoutes from "./routers/emailAttachmentRouter.js";
 import ipInfoRouter from './routers/ipInfoRouter.js';
 import thirdPartyPermissionRoutes from "./routers/thirdPartyPermissionRouter.js";
 import portActivityRouter from "./routers/portActivityRouter.js";
-
+import qrRoutes from './routers/qrRoute.js'; 
 
 
 
@@ -148,6 +148,8 @@ app.use("/api/email-attachment", emailAttachmentRoutes);
 app.use('/api/ip-info', ipInfoRouter);
 app.use("/api", thirdPartyPermissionRoutes);
 app.use("/api", portActivityRouter);
+app.use('/api/qr', qrRoutes);
+app.use('/uploads', express.static('uploads'));
 
 
 // Start Server
