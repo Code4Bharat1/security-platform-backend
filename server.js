@@ -12,8 +12,6 @@ import mongoose from 'mongoose';
 
 import connectDB from './utils/db.js';
 
-// Tool Routes
-
 import dnsRoutes from './routers/dnsRouter.js';
 
 import wafRoutes from './routers/wafRouter.js';
@@ -31,8 +29,8 @@ import brokenlinkRoutes from './routers/brokenLinkRouter.js';
 import keywordRoutes from './routers/keyword.router.js';
 
 import speedRoutes from './routers/speed.router.js';
-import metaAnalyzeRoutes from './routers/metaAnalyzeRoutes.js';
 
+import metaAnalyzeRoutes from './routers/metaAnalyzeRoutes.js';
 
 import oauthTokenRoutes from './routers/oauth.router.js';
 
@@ -58,7 +56,6 @@ import csrfRoutes from './routers/csrfRoutes.js';
 
 import regexRoutes from './routers/regexRoutes.js';
 
-
 import sessionFixationRoutes from './routers/sessionFixationRoutes.js';
 
 import whoisRoutes from './routers/whoisRouter.js';
@@ -83,10 +80,7 @@ import apiTestRoutes from './routers/apiTestRouter.js';
 
 import fingerprintRoutes from './routers/fingerprintRouter.js';
 
-import johnRouter from './routers/jhon-the-ripperRouter.js';
-
 import brokenAccessRoutes from './routers/brokenAccessRouter.js';
-
 
 import ssrfRoutes from './routers/ssrfRouter.js';
 
@@ -98,22 +92,17 @@ import aiHeaderRoutes from './routers/aiHeaderRouter.js';
 
 import rogueWiFiRoutes from './routers/rogueWifiRoutes.js';
 
-
 import linkDetectorRoutes from './routers/linkDetectorRouter.js';
 
 import sqliScannerRoutes from './routers/sqliScannerRouter.js';
 
 import hashGeneratorRouter from './routers/hashGeneratorRouter.js';
 
-
-import johnRoutes from "./routers/johnRouter.js";
-
 import secureCryptRoutes from "./routers/secureCryptRouter.js";
 
 import nexposeRoutes from './routers/nexposeRouter.js';
 
 import mdrMonitorRouter from "./routers/mdrMonitorRouter.js";
-
 
 import folderThreatScanRoutes from './routers/folderThreatScanRouter.js';
 
@@ -125,19 +114,22 @@ import socialPrivacyRoutes from "./routers/socialPrivacyRoutes.js";
 
 import fakeSoftwareRoutes from "./routers/fakeSoftwareRouter.js";
 
-
 import whatsappPrivacyRoutes from './routers/whatsappPrivacyRouter.js';
 
 import emailAttachmentRoutes from "./routers/emailAttachmentRouter.js";
 
-import ipInfoRouter from './routers/ipInfoRouter.js';
+import helmet from 'helmet';
 
 import ipInfoRoutes from "./routers/ipInfoRouter.js";
+
 import thirdPartyPermissionRoutes from "./routers/thirdPartyPermissionRouter.js";
 
 import portActivityRouter from "./routers/portActivityRouter.js";
 
 import qrRoutes from './routers/qrRoute.js'; 
+
+import seoRoutes from './routers/seoRouter.js';
+
 
 
 
@@ -193,10 +185,6 @@ app.use('/api/jwtsign', jwtsignatureRoutes);
 
 app.use('/api/ipgeo', IPGeoRouter);
 
-
-
-
-
 app.use('/api/clickjacking', clickjackingRouter);
 
 app.use('/api/http', httpsRouter);
@@ -241,7 +229,6 @@ app.use('/api/openRedirectTester', openRedirectRoutes);
 
 app.use('/api/code', codeObfuscationRoutes);
 
-
 app.use('/api/analysis', analysisRoutes);
 
 app.use('/api/sonar', sonarRoutes);
@@ -251,9 +238,6 @@ app.use('/api/analyze', analyzeCodeRoutes);
 app.use('/api/apiTest', apiTestRoutes);
 
 app.use('/api/fingerprint', fingerprintRoutes);
-
-app.use('/api/john', johnRouter);
-
 
 app.use('/api/brokenAccess', brokenAccessRoutes);
 
@@ -272,7 +256,6 @@ app.use('/api/link-detector', linkDetectorRoutes);
 app.use('/api/sqli', sqliScannerRoutes);
 
 app.use('/api', hashGeneratorRouter);
-
 
 app.use("/api/securecrypt", secureCryptRoutes); 
 
@@ -302,9 +285,10 @@ app.use("/api", portActivityRouter);
 
 app.use('/api/qr', qrRoutes);
 
-
-
 app.use('/uploads', express.static('uploads'));
+
+app.use('/api/seo', seoRoutes);
+
 
 
 // Start Server
