@@ -15,7 +15,7 @@ import express from 'express';
 import {
   encryptText,
   decryptText,
-} from '../controllers/securecryptController.js';
+} from '../controllers/secureCryptController.js';
 
 const router = express.Router();
 
