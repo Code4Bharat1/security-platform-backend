@@ -94,10 +94,6 @@ import rogueWiFiRoutes from './routers/rogueWifiRoutes.js';
 
 import linkDetectorRoutes from './routers/linkDetectorRouter.js';
 
-import sqliScannerRoutes from './routers/sqliScannerRouter.js';
-
-import hashGeneratorRouter from './routers/hashGeneratorRouter.js';
-
 import secureCryptRoutes from "./routers/secureCryptRouter.js";
 
 import nexposeRoutes from './routers/nexposeRouter.js';
@@ -252,10 +248,6 @@ app.use('/api/aiHeader', aiHeaderRoutes);
 app.use('/api/rogue-wifi', rogueWiFiRoutes);
 
 app.use('/api/link-detector', linkDetectorRoutes);
-
-app.use('/api/sqli', sqliScannerRoutes);
-
-app.use('/api', hashGeneratorRouter);
 
 app.use("/api/securecrypt", secureCryptRoutes); 
 
