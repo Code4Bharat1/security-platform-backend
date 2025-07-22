@@ -1,40 +1,43 @@
 import fs from 'fs';
 import QrCode from 'qrcode-reader';
 import { QrResult } from '../models/QrResult.js';
+import { Jimp } from 'jimp';
+import path from 'path';
 
 export const scanQRCode = async (req, res) => {
   try {
     const imagePath = req.file.path;
-
-    // ✅ Proper import
-    const Jimp = (await import('jimp')).default;
+    const fullPath = path.join(imagePath);
+    const buffer = fs.readFileSync(fullPath);
 
     const qrData = await Promise.race([
-      new Promise((resolve, reject) => {
-        Jimp.read(imagePath, (err, image) => {
-          if (err) return reject(err);
-          const qr = new QrCode();
-          qr.callback = (err, value) => {
-            if (err || !value) return resolve(null);
-            resolve(value.result);
-          };
-          qr.decode(image.bitmap);
-        });
+      new Promise(async (resolve) => {
+        const imgData = await Jimp.read(buffer)
+        const qr = new QrCode();
+        qr.callback = function (error, result) {
+          if (error || !result) {
+            console.log(error)
+            return resolve({error: 1, message: error});
+          }
+          console.log(result)
+          resolve({error: 0, message: error});
+        }
+        qr.decode(imgData.bitmap);
       }),
       new Promise((_, reject) =>
         setTimeout(() => reject(new Error('QR scan timeout')), 5000)
       )
     ]);
-
+    console.log("Hll")
     fs.unlinkSync(imagePath);
 
-    if (!qrData) {
-      return res.status(400).json({ status: 'error', message: 'Unable to scan QR code' });
+    if (qrData.error) {
+      return res.status(400).json({ status: 'error', message: qrData.error });
     }
 
     const suspiciousPatterns = ['bit.ly', 'tinyurl', 'gift', 'malware', '.apk', '.exe'];
     const isSuspicious = suspiciousPatterns.some(pattern =>
-      qrData.toLowerCase().includes(pattern)
+      qrData.result.includes(pattern)
     );
 
     const status = isSuspicious ? 'fake' : 'safe';
@@ -42,7 +45,7 @@ export const scanQRCode = async (req, res) => {
       ? '⚠️ Fake / suspicious QR code detected!'
       : '✅ Safe QR code. No malicious content found.';
 
-    await new QrResult({ data: qrData, status, reason: message }).save();
+    await new QrResult({ data: JSON.stringify(qrData), status, reason: message }).save();
 
     res.json({ status, data: qrData, message });
 
