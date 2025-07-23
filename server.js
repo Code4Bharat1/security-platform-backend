@@ -38,8 +38,6 @@ import jwtRoutes from './routers/jwtRoutes.js';
 
 import jwtsignatureRoutes from './routers/jwtsignature.routes.js';
 
-import IPGeoRouter from './routers/ipgeo.router.js';
-
 import clickjackingRouter from './routers/clickjacking.router.js';
 
 import httpsRouter from './routers/https.router.js';
@@ -90,8 +88,6 @@ import aiRoutes from './routers/aiRouter.js';
 
 import aiHeaderRoutes from './routers/aiHeaderRouter.js';
 
-import rogueWiFiRoutes from './routers/rogueWifiRoutes.js';
-
 import linkDetectorRoutes from './routers/linkDetectorRouter.js';
 
 import secureCryptRoutes from "./routers/secureCryptRouter.js";
@@ -126,7 +122,7 @@ import qrRoutes from './routers/qrRoute.js';
 
 import seoRoutes from './routers/seoRouter.js';
 
-
+import sqliRoutes from "./routers/sqliRouter.js";
 
 
 
@@ -178,8 +174,6 @@ app.use('/api/auth', oauthTokenRoutes);
 app.use('/api/jwt', jwtRoutes);
 
 app.use('/api/jwtsign', jwtsignatureRoutes);
-
-app.use('/api/ipgeo', IPGeoRouter);
 
 app.use('/api/clickjacking', clickjackingRouter);
 
@@ -245,8 +239,6 @@ app.use('/api/ai', aiRoutes);
 
 app.use('/api/aiHeader', aiHeaderRoutes);
 
-app.use('/api/rogue-wifi', rogueWiFiRoutes);
-
 app.use('/api/link-detector', linkDetectorRoutes);
 
 app.use("/api/securecrypt", secureCryptRoutes); 
@@ -281,6 +273,7 @@ app.use('/uploads', express.static('uploads'));
 
 app.use('/api/seo', seoRoutes);
 
+app.use("/api/sqli", sqliRoutes);
 
 
 // Start Server
