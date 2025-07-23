@@ -3,12 +3,10 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-
-import express, { Router } from 'express';
+import express from 'express';
+// server.js (ES Modules)
 
 import cors from 'cors';
-
-import mongoose from 'mongoose';
 
 import connectDB from './utils/db.js';
 
@@ -84,10 +82,6 @@ import ssrfRoutes from './routers/ssrfRouter.js';
 
 import sensitiveFileRoutes from './routers/sensitiveFileRouter.js';
 
-import aiRoutes from './routers/aiRouter.js';
-
-import aiHeaderRoutes from './routers/aiHeaderRouter.js';
-
 import linkDetectorRoutes from './routers/linkDetectorRouter.js';
 
 import secureCryptRoutes from "./routers/secureCryptRouter.js";
@@ -98,9 +92,9 @@ import mdrMonitorRouter from "./routers/mdrMonitorRouter.js";
 
 import folderThreatScanRoutes from './routers/folderThreatScanRouter.js';
 
-import  scanUSBRoutes  from "./routers/usbScannerRoutes.js";
+import scanUSBRoutes from "./routers/usbScannerRoutes.js";
 
-import dataLeakRoutes from './routers/dataLeakRoutes.js'; 
+import dataLeakRoutes from './routers/dataLeakRoutes.js';
 
 import socialPrivacyRoutes from "./routers/socialPrivacyRoutes.js";
 
@@ -118,7 +112,7 @@ import thirdPartyPermissionRoutes from "./routers/thirdPartyPermissionRouter.js"
 
 import portActivityRouter from "./routers/portActivityRouter.js";
 
-import qrRoutes from './routers/qrRoute.js'; 
+import qrRoutes from './routers/qrRoute.js';
 
 import seoRoutes from './routers/seoRouter.js';
 
@@ -235,31 +229,27 @@ app.use('/api/ssrf', ssrfRoutes);
 
 app.use('/api/sensitiveFile', sensitiveFileRoutes);
 
-app.use('/api/ai', aiRoutes);
-
-app.use('/api/aiHeader', aiHeaderRoutes);
-
 app.use('/api/link-detector', linkDetectorRoutes);
 
-app.use("/api/securecrypt", secureCryptRoutes); 
+app.use("/api/securecrypt", secureCryptRoutes);
 
 app.use('/api/nexpose', nexposeRoutes);
 
 app.use("/api/mdr-monitor", mdrMonitorRouter);
 
-app.use("/api/folder-scan", folderThreatScanRoutes); 
+app.use("/api/folder-scan", folderThreatScanRoutes);
 
 app.use("/api/scan-usb", scanUSBRoutes);
 
 app.use("/api/data-leak", dataLeakRoutes);
 
-app.use("/api", socialPrivacyRoutes);  
+app.use("/api", socialPrivacyRoutes);
 
 app.use("/api", fakeSoftwareRoutes);
 
 app.use("/api/whatsapp-privacy", whatsappPrivacyRoutes);
 
-app.use("/api/email-attachment", emailAttachmentRoutes); 
+app.use("/api/email-attachment", emailAttachmentRoutes);
 
 app.use("/api/ipinfo", ipInfoRoutes);
 
@@ -272,9 +262,6 @@ app.use('/api/qr', qrRoutes);
 app.use('/uploads', express.static('uploads'));
 
 app.use('/api/seo', seoRoutes);
-
-app.use("/api/sqli", sqliRoutes);
-
 
 // Start Server
 app.listen(PORT, () => {
