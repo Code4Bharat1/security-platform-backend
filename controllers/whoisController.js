@@ -1,7 +1,5 @@
-// import axios from 'axios';
 import { Whois } from '../models/whoisModel.js';
-import whois from 'whois'
-
+import whois from 'whois-json';   // ✅ sirf ek import rakh
 
 export const getWhoisData = async (req, res) => {
   try {
@@ -11,24 +9,20 @@ export const getWhoisData = async (req, res) => {
       return res.status(400).json({ error: 'Domain is required' });
     }
 
-    await whois.lookup(domain, async function (err, data) {
+    // ✅ whois-json async call, directly await
+    const data = await whois(domain);
 
-      if (err) {
-        console.log("Error: ", err)
-        res.status(500).json({ error: err });
-      }
+    // ✅ Save in DB
+    const whoisEntry = new Whois({
+      domain,
+      ...data,
+    });
+    await whoisEntry.save();
 
-      const whoisEntry = new Whois({
-        domain,
-        ...data,
-      });
+    res.json({ data });
 
-      await whoisEntry.save();
-
-      res.json({ data });
-    })
   } catch (err) {
-    console.error(err);
+    console.error('WHOIS error:', err);
     res.status(500).json({ error: 'Failed to fetch WHOIS data' });
   }
 };
