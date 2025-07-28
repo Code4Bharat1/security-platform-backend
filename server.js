@@ -118,6 +118,8 @@ import seoRoutes from './routers/seoRouter.js';
 
 import sqliRoutes from "./routers/sqliRouter.js";
 
+import contactRoutes from './routers/contactRoutes.js';
+
 
 
 
@@ -262,6 +264,10 @@ app.use('/api/qr', qrRoutes);
 app.use('/uploads', express.static('uploads'));
 
 app.use('/api/seo', seoRoutes);
+
+app.use('/api/contact', contactRoutes);
+
+
 
 // Start Server
 app.listen(PORT, () => {
