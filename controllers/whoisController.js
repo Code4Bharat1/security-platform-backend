@@ -6,7 +6,7 @@ import whois from 'whois'
 export const getWhoisData = async (req, res) => {
   try {
     const { domain } = req.body;
-
+    console.log(domain)
     if (!domain) {
       return res.status(400).json({ error: 'Domain is required' });
     }

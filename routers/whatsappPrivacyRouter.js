@@ -1,9 +1,9 @@
 // routers/whatsappPrivacyRouter.js
 import express from "express";
-import { inspectPrivacy } from "../controllers/whatsappPrivacyController.js";
+import a from "../controllers/whatsappPrivacyInspector.js";
 
 const router = express.Router();
 
-router.post("/", inspectPrivacy);
+router.post("/", a);
 
 export default router;

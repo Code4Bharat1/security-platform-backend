@@ -57,6 +57,7 @@ export async function detectWAF(req, res) {
     }
 
     const response = await fetch(url, { method: 'GET' });
+    console.log(response)
     const headers = response.headers;
     const status = response.status;
 
