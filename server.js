@@ -120,6 +120,15 @@ import sqliRoutes from "./routers/sqliRouter.js";
 
 import contactRoutes from './routers/contactRoutes.js';
 
+import urlShortenerRoutes from './routers/urlShortenerRouter.js';
+
+import osintRouter from './routers/osintRouter.js';
+
+import dbScanRouter from './routers/dbScanRouter.js';
+
+import keywordRouter from './routers/keywordRouter.js';
+
+
 
 
 
@@ -267,6 +276,13 @@ app.use('/api/seo', seoRoutes);
 
 app.use('/api/contact', contactRoutes);
 
+app.use('/', urlShortenerRoutes);
+
+app.use('/api/osint', osintRouter);
+
+app.use('/api/dbscan', dbScanRouter);
+
+app.use('/api/keywords', keywordRouter);
 
 
 // Start Server
