@@ -16,8 +16,8 @@ const scanPorts = async (host, startPort, endPort) => {
       service: open ? `Service ${port}` : "Unknown",
       risk: open ? (port % 2 === 0 ? "High" : "Low") : "None",
       description: open
-        ? `Port ${port} is open and running a service.`
-        : `Port ${port} is closed.`,
+        ? `Port ${port} is open and running a service. ${score} `
+        : `Port ${port} is closed. ${score} `,
     };
   }
     
@@ -54,7 +54,7 @@ export const portScanHandler = async (req, res) => {
       return res
         .status(400)
         .json({
-          error: `Port range too large. Max ${maxRange} ports allowed.`,
+          error: `Port range too large. Max ${maxRange} ports allowed. ${score} `,
         });
     }
 

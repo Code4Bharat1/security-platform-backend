@@ -44,7 +44,7 @@ export const detectDataLeak = async (req, res) => {
 
     const message =
       sensitiveMatches.size > 0
-        ? `⚠️ ${sensitiveMatches.size} sensitive pattern(s) detected.`
+        ? `⚠️ ${sensitiveMatches.size} sensitive pattern(s) detected. ${score} `
         : "✅ No sensitive data found.";
 
     res.status(200).json({

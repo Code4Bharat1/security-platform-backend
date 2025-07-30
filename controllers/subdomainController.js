@@ -1,21 +1,19 @@
 import { SubdomainResult } from '../models/subdomainModel.js';
 import axios from 'axios';
-    
-
 
 export const findSubdomains = async (req, res) => {
   const { domain } = req.body;
-const API_KEY = process.env.SECURITYTRAILS_API_KEY;
-console.log("Loaded API key:", API_KEY);
+  const API_KEY = process.env.SECURITYTRAILS_API_KEY;
+  console.log("Loaded API key:", API_KEY);
 
   if (!domain) {
     return res.status(400).json({ error: 'Domain is required.' });
   }
   try {
     // External API or mocked results
-     const response = await axios.get(`https://api.securitytrails.com/v1/domain/${domain}/subdomains`, {
+    const response = await axios.get(`https://api.securitytrails.com/v1/domain/${domain}/subdomains`, {
       headers: {
-       'APIKEY': API_KEY 
+        'APIKEY': API_KEY
       },
       timeout: 10000, // 10 seconds timeout
     });
@@ -34,9 +32,9 @@ console.log("Loaded API key:", API_KEY);
     });
 
     return res.status(200).json({ results: saved.results });
-  } 
+  }
 
-   catch (error) {
+  catch (error) {
     console.error('❌ Subdomain enumeration error:', error.message);
     if (error.response) {
       console.error('❌ API Error response:', error.response.status, error.response.data);

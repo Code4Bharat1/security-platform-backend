@@ -8,7 +8,7 @@ export const analyzeEmailAttachment = (req, res) => {
 
     const message = isSuspicious
       ? `⚠️ Suspicious attachment detected (${req.file.originalname})`
-      : `✅ ${req.file.originalname} is clean.`;
+      : `✅ ${req.file.originalname} is clean. ${score} `;
 
     res.json({ message });
   } catch (err) {

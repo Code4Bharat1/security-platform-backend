@@ -34,7 +34,7 @@ export const scanAppPermissions = async (req, res) => {
 
     const message =
       riskyDetected.length > 0
-        ? `⚠️ ${riskyDetected.length} risky permissions detected.`
+        ? `⚠️ ${riskyDetected.length} risky permissions detected. ${score} `
         : "✅ No risky permissions found.";
 
     // Save to MongoDB

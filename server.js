@@ -255,9 +255,9 @@ app.use("/api/email-attachment", emailAttachmentRoutes);
 
 app.use("/api/ipinfo", ipInfoRoutes);
 
-app.use("/api", thirdPartyPermissionRoutes);
+app.use("/api/permissons", thirdPartyPermissionRoutes);
 
-app.use("/api", portActivityRouter);
+app.use("/api/port", portActivityRouter);
 
 app.use('/api/qr', qrRoutes);
 
@@ -267,7 +267,9 @@ app.use('/api/seo', seoRoutes);
 
 app.use('/api/contact', contactRoutes);
 
-
+app.get('/', (req, res) => {
+  res.status(200).send("API is running...")
+})
 
 // Start Server
 app.listen(PORT, () => {
