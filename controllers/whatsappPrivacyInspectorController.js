@@ -1,16 +1,52 @@
-import Tesseract from "tesseract.js"
-import sharp from 'sharp';
+import Tesseract from "tesseract.js";
+import sharp from "sharp";
+import path from "path";
+import fs from  'fs'
 
-var titleValue = {}
+var titleValue = {};
 var messages = [];
-var score = 0
-var imageBuffer = ""
+var score = 0;
 
-const privacyViewTitleTexts = ["who can see my personal info", "last seen and online", "profile picture", "about", "links", "status", "read receipts", "disappearing messages", "default message timer", "groups", "avatar stickers", "live location", "calls", "contacts", "app lock", "chat lock", "allow camera effects", "privacy checkup"]
-const privacyViewTitleNeededTexts = ["last seen and online", "profile picture", "about", "links", "status", "read receipts", "default message timer", "groups", "avatar stickers", "app lock", "allow camera effects"]
-const advancedViewTitleTexts = ["block unknown accound messages", "protect ip address in call", "disable link previews"]
+const privacyViewTitleTexts = [
+    "who can see my personal info",
+    "last seen and online",
+    "profile picture",
+    "about",
+    "links",
+    "status",
+    "read receipts",
+    "disappearing messages",
+    "default message timer",
+    "groups",
+    "avatar stickers",
+    "live location",
+    "calls",
+    "contacts",
+    "app lock",
+    "chat lock",
+    "allow camera effects",
+    "privacy checkup",
+];
+const privacyViewTitleNeededTexts = [
+    "last seen and online",
+    "profile picture",
+    "about",
+    "links",
+    "status",
+    "read receipts",
+    "default message timer",
+    "groups",
+    "avatar stickers",
+    "app lock",
+    "allow camera effects",
+];
+const advancedViewTitleTexts = [
+    "block unknown accound messages",
+    "protect ip address in call",
+    "disable link previews",
+];
 
-async function containsGreen(yStart = 0, yEnd = null) {
+async function containsGreen(imageBuffer, yStart = 0, yEnd = null) {
     const image = sharp(imageBuffer);
     const metadata = await image.metadata();
 
@@ -42,14 +78,13 @@ async function containsGreen(yStart = 0, yEnd = null) {
         const g = rawBuffer[i + 1];
         const b = rawBuffer[i + 2];
 
-        // Visible green detection logic
+        // Green pixel detection heuristic
         const avg = (r + g + b) / 3;
         const isGreenDominant = g > r + 25 && g > b + 25;
         const isBrightEnough = avg > 50;
         const isNotGray = Math.abs(r - g) > 15 || Math.abs(b - g) > 15;
 
         if (g > 60 && isGreenDominant && isBrightEnough && isNotGray) {
-            console.log(`Green pixel found: R=${r}, G=${g}, B=${b}`);
             return true;
         }
     }
@@ -57,7 +92,7 @@ async function containsGreen(yStart = 0, yEnd = null) {
     return false;
 }
 
-async function ratePrivacyView(lines, linesWithPos) {
+async function ratePrivacyView(lines, linesWithPos, imageBuffer) {
     let currentTitle = "";
 
     for (const line of lines) {
@@ -74,15 +109,16 @@ async function ratePrivacyView(lines, linesWithPos) {
             if (titleValue[currentTitle]) continue;
 
             const endsWithValue = currentTitle.includes("read receipts") ? "read" : "allow";
+
             let tsvData = linesWithPos.filter((value) => value.endsWith(endsWithValue));
             tsvData = tsvData.map((value) => value.split("\t"));
 
             const readTextPos = [
                 Math.round(parseInt(tsvData[0][7], 10)) - 10,
-                Math.round(parseInt(tsvData[0][9], 10)) + Math.round(parseInt(tsvData[0][7], 10)) + 10
+                Math.round(parseInt(tsvData[0][9], 10)) + Math.round(parseInt(tsvData[0][7], 10)) + 10,
             ];
 
-            titleValue[currentTitle] = await containsGreen(readTextPos[0], readTextPos[1]) ? "on" : "off";
+            titleValue[currentTitle] = (await containsGreen(imageBuffer, readTextPos[0], readTextPos[1])) ? "on" : "off";
             currentTitle = "";
             continue;
         } else if (currentTitle === "default message timer") {
@@ -98,6 +134,7 @@ async function ratePrivacyView(lines, linesWithPos) {
         titleValue[currentTitle] = line.includes(",") ? line.replace(" ", "").split(",") : line;
     }
 
+    // Scoring & messages
     Object.keys(titleValue).forEach((value) => {
         if (value.includes("last seen and online")) {
             let local_score = 0;
@@ -227,14 +264,12 @@ async function ratePrivacyView(lines, linesWithPos) {
             score += points;
         }
     });
-
-    console.log("Privacy Score:", score);
-    messages.forEach((msg) => console.log(msg));
 }
 
-async function rateAdvancedView(linesWithPos) {
+async function rateAdvancedView(linesWithPos, imageBuffer) {
     let currentTitle = "";
 
+    // Filter for advanced options that end with these keywords
     let tsvData = linesWithPos.filter((value, index) =>
         (value.endsWith("block") && linesWithPos[index + 1]?.endsWith("unknown")) ||
         (value.endsWith("protect") && linesWithPos[index + 1]?.endsWith("ip")) ||
@@ -250,71 +285,69 @@ async function rateAdvancedView(linesWithPos) {
 
         let readTextPos = [
             Math.round(parseInt(value[7], 10)) - 10,
-            Math.round(parseInt(value[9], 10)) + Math.round(parseInt(value[7], 10)) + 10
+            Math.round(parseInt(value[9], 10)) + Math.round(parseInt(value[7], 10)) + 10,
         ];
 
-        titleValue[currentTitle] = await containsGreen(readTextPos[0], readTextPos[1]) ? "on" : "off";
+        titleValue[currentTitle] = (await containsGreen(imageBuffer, readTextPos[0], readTextPos[1])) ? "on" : "off";
     }
-
-    Object.keys(titleValue).forEach((value) => {
-        if (advancedViewTitleTexts.some((key) => value.includes(key))) {
-            let points = 0;
-            if (titleValue[value] === "on") {
-                points = 2;
-                messages.push(`${value}: Enabled. Adds extra privacy and security. (+${points})`);
-            } else if (titleValue[value] === "off") {
-                points = 0;
-                messages.push(`${value}: Disabled. Less privacy protection. (+${points})`);
-            } else {
-                messages.push(`${value}: Invalid setting.`);
-            }
-            score += points;
-        }
-    });
-
-    console.log("Advanced Privacy Score:", score);
-    messages.forEach((msg) => console.log(msg));
 }
 
 const whatsappPrivacyInspectorController = async (req, res) => {
-    
-    const images = [req.files.image1[0], req.files.image2[0]]
+    const images = req.files.map((value) => path.resolve(value.path));
+    // Reset globals for each request
+    titleValue = {};
+    messages = [];
+    score = 0;
 
-    for (const image in images) {
-        imageBuffer = await sharp(image).toBuffer();
-        const worker = await Tesseract.createWorker('eng');
+    try {
+        for (const image of images) {
+            const imageBuffer = await sharp(image).toBuffer();
 
-        let recognizedDataText = ""
-        let recognizedDataTSV = ""
-        try {
+            const worker = await Tesseract.createWorker('eng');
+
             const { data } = await worker.recognize(imageBuffer, {}, { tsv: 1 });
 
-            recognizedDataText = data.text.replace(/[^a-zA-Z0-9\n\s]/g, '').split("\n").filter((value) => value != '')
-            recognizedDataText = recognizedDataText.map((value) => value.trim().toLowerCase())
-            recognizedDataTSV = data.tsv.split("\n")
-            recognizedDataTSV = recognizedDataTSV.map((value) => value.trim().toLowerCase())
+            // Prepare OCR text lines and TSV lines for analysis
+            let recognizedDataText = data.text
+                .replace(/[^a-zA-Z0-9\n\s]/g, "")
+                .split("\n")
+                .filter((value) => value != "")
+                .map((value) => value.trim().toLowerCase());
 
-            if (recognizedDataText.filter((value) => value.endsWith("privacy")).length) {
-                view = "privacy"
-                ratePrivacyView(recognizedDataText, recognizedDataTSV)
-            } else if (recognizedDataText.filter((value) => value.endsWith("advanced")).length) {
-                view = "advanced"
-                rateAdvancedView(recognizedDataTSV)
-            } else {
-                view = "invalid"
-                throw new Error("Please enter proper whatsapp privacy and advance page image.");
+            let recognizedDataTSV = data.tsv
+                .split("\n")
+                .filter((value) => value.trim() !== "")
+                .map((value) => value.trim().toLowerCase());
+
+            // Only continue if privacy title text is present in recognized text
+            if (!recognizedDataText.some((val) => val.endsWith("privacy"))) {
+                await worker.terminate();
+                continue;
             }
-            res.status(200).json({score: score, messages: messages});
-        } catch (err) {
-            console.log('OCR failed for one of the images.', err);
-        }
-        titleValue = {}
-        message = []
-        score = 0
-        var imageBuffer = ""
 
-        await worker.terminate();
+            await ratePrivacyView(recognizedDataText, recognizedDataTSV, imageBuffer);
+            await rateAdvancedView(recognizedDataTSV, imageBuffer);
+
+            await worker.terminate();
+        }
+
+        return res.status(200).json({
+            success: true,
+            score,
+            messages,
+            settings: titleValue,
+        });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ success: false, message: "Server error" });
+    } finally {
+        for (const image of images) {
+            fs.unlink(image, (err) => {
+                if (err) console.error(`Failed to delete ${image}:`, err);
+                else console.log(`Deleted ${image}`);
+            });
+        }
     }
-}
+};
 
 export default whatsappPrivacyInspectorController;

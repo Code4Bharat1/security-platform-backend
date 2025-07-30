@@ -144,7 +144,7 @@ app.use(
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       fontSrc: ["'self'"],
-      imgSrc: ["'self'", "data:"],
+      imgSrc: ["'self'", "data:", "blob:"],
       connectSrc: [
         "'self'",
         'http://localhost:4180', // 👈 Allow local API
@@ -249,7 +249,7 @@ app.use("/api", socialPrivacyRoutes);
 
 app.use("/api", fakeSoftwareRoutes);
 
-app.use("/api/whatsapp-privacy", whatsappPrivacyRoutes);
+app.use("/api/whatsapp-privacy-inspector", whatsappPrivacyRoutes);
 
 app.use("/api/email-attachment", emailAttachmentRoutes);
 
