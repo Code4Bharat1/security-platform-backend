@@ -153,7 +153,7 @@ app.use(
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       fontSrc: ["'self'"],
-      imgSrc: ["'self'", "data:"],
+      imgSrc: ["'self'", "data:", "blob:"],
       connectSrc: [
         "'self'",
         'http://localhost:4180', // 👈 Allow local API
@@ -258,15 +258,15 @@ app.use("/api", socialPrivacyRoutes);
 
 app.use("/api", fakeSoftwareRoutes);
 
-app.use("/api/whatsapp-privacy", whatsappPrivacyRoutes);
+app.use("/api/whatsapp-privacy-inspector", whatsappPrivacyRoutes);
 
 app.use("/api/email-attachment", emailAttachmentRoutes);
 
 app.use("/api/ipinfo", ipInfoRoutes);
 
-app.use("/api", thirdPartyPermissionRoutes);
+app.use("/api/permissons", thirdPartyPermissionRoutes);
 
-app.use("/api", portActivityRouter);
+app.use("/api/port", portActivityRouter);
 
 app.use('/api/qr', qrRoutes);
 
@@ -283,7 +283,9 @@ app.use('/api/osint', osintRouter);
 app.use('/api/dbscan', dbScanRouter);
 
 app.use('/api/keywords', keywordRouter);
-
+app.get('/', (req, res) => {
+  res.status(200).send("API is running...")
+})
 
 // Start Server
 app.listen(PORT, () => {

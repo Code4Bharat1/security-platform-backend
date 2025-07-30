@@ -45,7 +45,7 @@ export const validateJWT = async (req, res) => {
     return res
       .status(400)
       .json({
-        error: `Invalid JWT format. Found ${tokenParts.length} parts, expected 3.`,
+        error: `Invalid JWT format. Found ${tokenParts.length} parts, expected 3. ${score} `,
       });
   }
 

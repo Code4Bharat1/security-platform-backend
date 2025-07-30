@@ -19,13 +19,13 @@ export const analyzeCode = async (req, res) => {
     const lineNumber = index + 1;
 
     if (trimmed.includes('eval(')) {
-      resultsArray.push(`Line ${lineNumber}: Avoid using eval().`);
+      resultsArray.push(`Line ${lineNumber}: Avoid using eval(). ${score} `);
       failed++;
     } else if (trimmed.includes('document.write')) {
-      resultsArray.push(`Line ${lineNumber}: Avoid using document.write().`);
+      resultsArray.push(`Line ${lineNumber}: Avoid using document.write(). ${score} `);
       failed++;
     } else if (trimmed.includes('innerhtml')) {
-      resultsArray.push(`Line ${lineNumber}: Avoid using innerHTML.`);
+      resultsArray.push(`Line ${lineNumber}: Avoid using innerHTML. ${score} `);
       failed++;
     } else {
       passed++;

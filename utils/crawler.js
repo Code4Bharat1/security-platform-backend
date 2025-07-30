@@ -1,4 +1,3 @@
-// utils/crawler.js
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 
@@ -16,27 +15,33 @@ const crawlWebsite = async (startUrl, maxDepth = 3) => {
 
     if (visited.has(url) || depth > maxDepth) continue;
 
+    visited.add(url);
+
     try {
       const res = await axios.get(url);
-      visited.add(url);
       result.push(url);
 
       const $ = cheerio.load(res.data);
       $('a[href]').each((_, el) => {
         let link = $(el).attr('href');
-        if (link.startsWith('/')) link = `${startUrl}${link}`;
-        if (link.startsWith('http') && new URL(link).hostname === domain) {
-          queue.push({ url: link, depth: depth + 1 });
+        try {
+          link = new URL(link, url).href;
+          const linkDomain = new URL(link).hostname;
+          if (linkDomain === domain && !visited.has(link)) {
+            queue.push({ url: link, depth: depth + 1 });
+          }
+        } catch {
+          // invalid url, skip
         }
       });
 
-      await sleep(300); // Be nice to servers
+      await sleep(300); // Respect servers
     } catch (err) {
       console.warn(`Failed to crawl ${url}:`, err.message);
     }
   }
 
-  return Array.from(new Set(result)); // Unique URLs
+  return result;
 };
 
 export default crawlWebsite;

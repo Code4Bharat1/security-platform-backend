@@ -1,9 +1,9 @@
 import express from "express";
-import { scanLink } from "../controllers/linkDetectorController.js";
+import { getIpInfo } from "../controllers/ipInfoController.js"
 
 const router = express.Router();
 
 // POST /api/link-detector/link-scan
-router.post("/link-scan", scanLink);
+router.post("/", getIpInfo);
 
 export default router;
