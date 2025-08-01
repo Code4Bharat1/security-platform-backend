@@ -1,56 +1,62 @@
-import fs from 'fs';
-import QrCode from 'qrcode-reader';
-import { QrResult } from '../models/QrResult.js';
-import { Jimp } from 'jimp';
+import QRCode from 'qrcode';
 import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { createRequire } from 'node:module';
 
-export const scanQRCode = async (req, res) => {
+const require = createRequire(import.meta.url);
+const Jimp = require('jimp');
+const jsQR = require('jsqr');
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// ✅ Generate QR Code
+export const generateQRController = async (req, res) => {
   try {
-    const imagePath = req.file.path;
-    const fullPath = path.join(imagePath);
-    const buffer = fs.readFileSync(fullPath);
+    const { text } = req.body;
 
-    const qrData = await Promise.race([
-      new Promise(async (resolve) => {
-        const imgData = await Jimp.read(buffer)
-        const qr = new QrCode();
-        qr.callback = function (error, result) {
-          if (error || !result) {
-            console.log(error)
-            return resolve({error: 1, message: error});
-          }
-          console.log(result)
-          resolve({error: 0, message: error});
-        }
-        qr.decode(imgData.bitmap);
-      }),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('QR scan timeout')), 5000)
-      )
-    ]);
-    console.log("Hll")
-    fs.unlinkSync(imagePath);
-
-    if (qrData.error) {
-      return res.status(400).json({ status: 'error', message: qrData.error });
+    if (!text) {
+      return res.status(400).json({ status: 'error', message: 'Text is required' });
     }
 
-    const suspiciousPatterns = ['bit.ly', 'tinyurl', 'gift', 'malware', '.apk', '.exe'];
-    const isSuspicious = suspiciousPatterns.some(pattern =>
-      qrData.result.includes(pattern)
-    );
+    const qrImageBuffer = await QRCode.toBuffer(text); // Generates buffer
 
-    const status = isSuspicious ? 'fake' : 'safe';
-    const message = isSuspicious
-      ? '⚠️ Fake / suspicious QR code detected!'
-      : '✅ Safe QR code. No malicious content found.';
-
-    await new QrResult({ data: JSON.stringify(qrData), status, reason: message }).save();
-
-    res.json({ status, data: qrData, message });
-
+    res.setHeader('Content-Type', 'image/png');
+    res.send(qrImageBuffer);
   } catch (err) {
-    console.error('QR Scan Error:', err);
-    res.status(500).json({ status: 'error', message: err.message || 'Server error while scanning QR' });
+    console.error('[QR Generate Error]', err);
+    res.status(500).json({ status: 'error', message: 'Failed to generate QR code' });
+  }
+};
+
+// ✅ Scan QR Code
+export const scanQRController = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ status: 'error', message: 'No file uploaded' });
+    }
+
+    const imagePath = path.join(__dirname, '..', 'uploads', req.file.filename);
+    const image = await Jimp.read(imagePath);
+
+    const imageBitmap = {
+      data: new Uint8ClampedArray(image.bitmap.data),
+      width: image.bitmap.width,
+      height: image.bitmap.height,
+    };
+
+    const qrCode = jsQR(imageBitmap.data, imageBitmap.width, imageBitmap.height);
+
+    fs.unlinkSync(imagePath); // Clean up uploaded image after scan
+
+    if (qrCode) {
+      res.status(200).json({ status: 'success', message: qrCode.data });
+    } else {
+      res.status(400).json({ status: 'error', message: 'QR code not detected' });
+    }
+  } catch (err) {
+    console.error('[QR Scan Error]', err);
+    res.status(500).json({ status: 'error', message: 'Failed to scan QR code' });
   }
 };
