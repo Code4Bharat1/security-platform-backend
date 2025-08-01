@@ -19,20 +19,21 @@ export const getIpInfo = async (req, res) => {
   try {
     const response = await fetch(`https://ipwho.is/${ip}`);
     const data = await response.json();
+    console.log(data)
 
     if (!response.ok || data.error) {
       return res.status(404).json({ error: "Invalid IP address or not found." });
     }
 
     res.json({
-      ip: data.ip || "N/A",
-      country: data.country || "N/A",
-      city: data.city || "N/A",
-      isp: data.connection?.isp || "N/A",
-      org: data.connection?.org || "N/A",
-      timezone: data.timezone?.id || "N/A",
-      latitude: data.latitude || "N/A",
-      longitude: data.longitude || "N/A",
+      ip: data.ip ?? "N/A",
+      country: data.country ?? "N/A",
+      city: data.city ?? "N/A",
+      isp: data.connection?.isp ?? "N/A",
+      org: data.connection?.org ?? "N/A",
+      timezone: data.timezone?.id ?? "N/A",
+      latitude: data.latitude ?? "N/A",
+      longitude: data.longitude ?? "N/A",
     });
   } catch (error) {
     logger.error(`Fetch error: ${error.message}`, { error });

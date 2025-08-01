@@ -1,8 +1,8 @@
+import jwt from 'jsonwebtoken';
 import User from '../models/user.js';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 
-// Signup controller
+// ✅ Signup controller
 export const signup = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -21,7 +21,7 @@ export const signup = async (req, res) => {
   }
 };
 
-// Login controller
+// ✅ Login controller
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -38,5 +38,33 @@ export const login = async (req, res) => {
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ message: "Login failed" });
+  }
+};
+
+// ✅ Inspect Token controller
+export const inspectToken = async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: "Token not provided" });
+
+    const decoded = jwt.decode(token, { complete: true });
+
+    if (!decoded) {
+      return res.status(400).json({ error: "Invalid token or cannot decode" });
+    }
+
+    const payload = decoded.payload;
+    const issues = [];
+
+    if (!payload.exp) issues.push("⚠️ Token missing expiration (exp) claim");
+    if (payload.exp && Date.now() >= payload.exp * 1000) issues.push("❌ Token has expired");
+    if (!payload.iss) issues.push("⚠️ Token missing issuer (iss) claim");
+    if (!payload.sub) issues.push("⚠️ Token missing subject (sub) claim");
+    if (!payload.iat) issues.push("⚠️ Token missing issued-at (iat) claim");
+
+    res.json({ payload, issues });
+  } catch (error) {
+    console.error("Token inspect error:", error);
+    res.status(500).json({ error: "Failed to analyze token" });
   }
 };
