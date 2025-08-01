@@ -27,7 +27,7 @@
     "jsqr": "^1.4.0",
     "keyword-extractor": "^0.0.28",
     "mongoose": "^8.16.2",
-    "multer": "^2.0.1",
+    "multer": "^2.0.2",
     "node-fetch": "^2.7.0",
     "node-html-parser": "^7.0.1",
     "node-tesseract-ocr": "^2.2.1",
