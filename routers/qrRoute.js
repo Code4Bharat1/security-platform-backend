@@ -1,7 +1,11 @@
-import express from 'express';
-import { upload } from '../middleware/upload.js';
-import { scanQRCode } from '../controllers/qrController.js';
+import express from "express";
+import multer from "multer";
+import { generateQRController, scanQRController } from "../controllers/qrController.js";
 
 const router = express.Router();
-router.post('/scan', upload.single('qrImage'), scanQRCode);
+const upload = multer({ dest: "uploads/" });
+
+router.post("/generate", generateQRController);
+router.post("/scan", upload.single("qrImage"), scanQRController);
+
 export default router;

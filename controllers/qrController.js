@@ -1,56 +1,83 @@
-import fs from 'fs';
-import QrCode from 'qrcode-reader';
-import { QrResult } from '../models/QrResult.js';
-import { Jimp } from 'jimp';
-import path from 'path';
+import { spawn } from "child_process";
+import path from "path";
+import fs from "fs";
 
-export const scanQRCode = async (req, res) => {
-  try {
-    const imagePath = req.file.path;
-    const fullPath = path.join(imagePath);
-    const buffer = fs.readFileSync(fullPath);
+// ✅ Auto-handle OS Python command
+const PYTHON = process.platform === "win32" ? "python" : "python3";
 
-    const qrData = await Promise.race([
-      new Promise(async (resolve) => {
-        const imgData = await Jimp.read(buffer)
-        const qr = new QrCode();
-        qr.callback = function (error, result) {
-          if (error || !result) {
-            console.log(error)
-            return resolve({error: 1, message: error});
-          }
-          console.log(result)
-          resolve({error: 0, message: error});
-        }
-        qr.decode(imgData.bitmap);
-      }),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('QR scan timeout')), 5000)
-      )
-    ]);
-    console.log("Hll")
-    fs.unlinkSync(imagePath);
+// ✅ Paths to Python scripts
+const generatorPath = path.join(process.cwd(), "scripts", "qr_generator.py");
+const detectorPath = path.join(process.cwd(), "scripts", "qr_detector.py");
 
-    if (qrData.error) {
-      return res.status(400).json({ status: 'error', message: qrData.error });
+// ✅ QR GENERATOR CONTROLLER
+export const generateQRController = (req, res) => {
+  const { url } = req.body;
+  console.log("🔧 Incoming URL:", url);
+  if (!url) return res.status(400).json({ error: "URL is required" });
+
+  const outputsDir = path.join(process.cwd(), "outputs");
+  console.log("📂 Output path:", outputsDir);
+
+  if (!fs.existsSync(outputsDir)) {
+    console.log("🛠 Creating outputs folder...");
+    fs.mkdirSync(outputsDir, { recursive: true });
+  }
+
+  const filename = `qr_${Date.now()}.png`;
+  const outputPath = path.join(outputsDir, filename);
+  console.log("📦 Final QR file:", outputPath);
+
+  const py = spawn(PYTHON, [generatorPath, url, "--save", outputPath], {
+    env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+  });
+
+  py.stdout.on("data", (data) => {
+    console.log("[Python STDOUT]:", data.toString());
+  });
+
+  py.stderr.on("data", (err) => {
+    console.error("[Python Generator Error]:", err.toString());
+  });
+
+  py.on("close", (code) => {
+    console.log("🔚 Python exited with code:", code);
+    const exists = fs.existsSync(outputPath);
+    console.log("✅ File exists after Python?", exists);
+
+    if (code !== 0 || !exists) {
+      return res.status(500).json({ error: "QR generation failed." });
     }
 
-    const suspiciousPatterns = ['bit.ly', 'tinyurl', 'gift', 'malware', '.apk', '.exe'];
-    const isSuspicious = suspiciousPatterns.some(pattern =>
-      qrData.result.includes(pattern)
-    );
+    const image = fs.readFileSync(outputPath);
+    res.set("Content-Type", "image/png");
+    res.send(image);
+    fs.unlinkSync(outputPath);
+  });
+};
 
-    const status = isSuspicious ? 'fake' : 'safe';
-    const message = isSuspicious
-      ? '⚠️ Fake / suspicious QR code detected!'
-      : '✅ Safe QR code. No malicious content found.';
 
-    await new QrResult({ data: JSON.stringify(qrData), status, reason: message }).save();
+// ✅ QR DETECTOR CONTROLLER
+export const scanQRController = (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "QR image required" });
 
-    res.json({ status, data: qrData, message });
+  const filePath = path.resolve(req.file.path);
 
-  } catch (err) {
-    console.error('QR Scan Error:', err);
-    res.status(500).json({ status: 'error', message: err.message || 'Server error while scanning QR' });
-  }
+  const py = spawn(PYTHON, [detectorPath, filePath], {
+    env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+  });
+
+  let result = "";
+
+  py.stdout.on("data", (data) => {
+    result += data.toString();
+  });
+
+  py.stderr.on("data", (err) => {
+    console.error("[Python Detector Error]:", err.toString());
+  });
+
+  py.on("close", () => {
+    fs.unlink(filePath, () => {}); // Cleanup uploaded file
+    res.status(200).json({ report: result.trim() });
+  });
 };
