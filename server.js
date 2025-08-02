@@ -32,8 +32,6 @@ import metaAnalyzeRoutes from './routers/metaAnalyzeRoutes.js';
 
 import oauthTokenRoutes from './routers/oauth.router.js';
 
-import jwtRoutes from './routers/jwtRoutes.js';
-
 import jwtsignatureRoutes from './routers/jwtsignature.routes.js';
 
 import clickjackingRouter from './routers/clickjacking.router.js';
@@ -128,6 +126,7 @@ import dbScanRouter from './routers/dbScanRouter.js';
 
 import keywordRouter from './routers/keywordRouter.js';
 
+import bruteForceRoutes from './routers/bruteForceRouter.js';
 
 
 
@@ -175,8 +174,6 @@ app.use('/api/speed', speedRoutes);
 app.use('/api/meta', metaAnalyzeRoutes);
 
 app.use('/api/auth', oauthTokenRoutes);
-
-app.use('/api/jwt', jwtRoutes);
 
 app.use('/api/jwtsign', jwtsignatureRoutes);
 
@@ -283,6 +280,12 @@ app.use('/api/osint', osintRouter);
 app.use('/api/dbscan', dbScanRouter);
 
 app.use('/api/keywords', keywordRouter);
+
+app.use('/api/bruteForce', bruteForceRoutes);
+
+
+
+
 app.get('/', (req, res) => {
   res.status(200).send("API is running...")
 })
