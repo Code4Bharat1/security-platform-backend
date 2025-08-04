@@ -273,7 +273,7 @@ app.use('/api/seo', seoRoutes);
 
 app.use('/api/contact', contactRoutes);
 
-app.use('/api', urlShortenerRoutes);
+app.use('/', urlShortenerRoutes);
 
 app.use('/api/osint', osintRouter);
 
