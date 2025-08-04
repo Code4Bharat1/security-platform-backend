@@ -11,7 +11,10 @@ export const scanQRCode = async (req, res) => {
     const imagePath = path.resolve(req.file.path);
     console.log(imagePath)
 
-    execFile('python', ['../scripts/qr_detector.py', imagePath], { encoding: 'utf8' }, (error, stdout, stderr) => {
+    const scriptPath = path.resolve('./scripts/qr_detector.py');
+
+
+    execFile('python3', [scriptPath, imagePath], { encoding: 'utf8' }, (error, stdout, stderr) => {
       if (error) {
       console.log('Script error:', error);
 
@@ -60,7 +63,7 @@ export const generateQRCode = (req, res) => {
     }
 
     // Resolve path to your Python script
-    const scriptPath = path.resolve('../scripts/qr_generator.py');
+    const scriptPath = path.resolve('./scripts/qr_generator.py');
 
     // Call python script with text argument (make sure to sanitize/escape if needed)
     execFile('python', [scriptPath, text], { encoding: 'utf8' }, (error, stdout, stderr) => {
