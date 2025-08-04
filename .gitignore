@@ -1,6 +1,6 @@
 node_modules/
 uploads/
-scripts/
+# scripts/
 package-lock.json
 dist
 a.jpeg
