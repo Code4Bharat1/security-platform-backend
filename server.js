@@ -273,7 +273,7 @@ app.use('/api/seo', seoRoutes);
 
 app.use('/api/contact', contactRoutes);
 
-app.use('/', urlShortenerRoutes);
+app.use('/api', urlShortenerRoutes);
 
 app.use('/api/osint', osintRouter);
 
@@ -282,9 +282,6 @@ app.use('/api/dbscan', dbScanRouter);
 app.use('/api/keywords', keywordRouter);
 
 app.use('/api/bruteForce', bruteForceRoutes);
-
-
-
 
 app.get('/', (req, res) => {
   res.status(200).send("API is running...")
