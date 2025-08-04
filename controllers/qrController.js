@@ -3,6 +3,8 @@ import fs from 'fs';
 import path from 'path'
 import { QrResult } from '../models/QrResult.js';
 
+const pythonEnvPath = path.resolve('./venv/bin/python3')
+
 // TODO: Add Download and Copy button once QR Code is generated
 // TODO: Add Copy (for all) and (only for link)ablity to click and load the scaned link (if found) in other tab.
 
@@ -13,8 +15,7 @@ export const scanQRCode = async (req, res) => {
 
     const scriptPath = path.resolve('./scripts/qr_detector.py');
 
-
-    execFile('python3', [scriptPath, imagePath], { encoding: 'utf8' }, (error, stdout, stderr) => {
+    execFile(pythonEnvPath, [scriptPath, imagePath], { encoding: 'utf8' }, (error, stdout, stderr) => {
       if (error) {
       console.log('Script error:', error);
 
@@ -66,7 +67,7 @@ export const generateQRCode = (req, res) => {
     const scriptPath = path.resolve('./scripts/qr_generator.py');
 
     // Call python script with text argument (make sure to sanitize/escape if needed)
-    execFile('python', [scriptPath, text], { encoding: 'utf8' }, (error, stdout, stderr) => {
+    execFile(pythonEnvPath, [scriptPath, text], { encoding: 'utf8' }, (error, stdout, stderr) => {
       if (error) {
         console.error('QR Generator script error:', error);
         return res.status(400).json({ status: 'error', message: error.message });
