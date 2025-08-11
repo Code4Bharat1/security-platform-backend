@@ -52,7 +52,7 @@ async function checkRedirect(url) {
       url,
       {
         method: "GET",
-        timeout: 10000, // 10 second timeout
+        timeout: 30000, // 30 second timeout
         // Follow redirects manually to check if they go to HTTPS
         followRedirect: false,
       },
