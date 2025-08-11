@@ -1,50 +1,78 @@
 import PortScan from "../models/portScan.model.js";
+import { execFile } from 'child_process';
+import path from 'path'
 
 // Simulated scanning function - replace with real scanning logic
-const scanPorts = async (host, startPort, endPort) => {
-  const ports = {};
-  const total = endPort - startPort + 1;
-  let openCount = 0;
-         
-  for (let port = startPort; port <= endPort; port++) {
-    const open = Math.random() < 0.2; // 20% chance open
-    if (open) openCount++;
+const scanPorts = async (host, start, end) => {
+  const total = end - start;
+  const scriptPath = path.resolve('./scripts/portscan.py');
 
-    ports[port] = {
-      port,
-      open,
-      service: open ? `Service ${port}` : "Unknown",
-      risk: open ? (port % 2 === 0 ? "High" : "Low") : "None",
-      description: open
-        ? `Port ${port} is open and running a service. ${score} `
-        : `Port ${port} is closed. ${score} `,
-    };
-  }
-    
-  // Risk assessment (simplified)
-  let riskAssessment = "Low";
-  if (openCount > total * 0.3) riskAssessment = "High";
-  else if (openCount > total * 0.1) riskAssessment = "Medium";
+  return new Promise((resolve, reject) => {
+    execFile('python', [scriptPath, host], { encoding: 'utf8' }, (error, stdout, stderr) => {
+      if (error) {
+        console.error('Port Scanner script error:', error);
+        return reject({ status: 'error', message: error.message });
+      }
 
-  const recommendations = [];
-  if (riskAssessment === "High")
-    recommendations.push("Close unused open ports immediately.");
-  else if (riskAssessment === "Medium")
-    recommendations.push("Monitor open ports regularly.");
+      if (stderr) {
+        console.warn('Port Scanner stderr:', stderr);
+        // Optionally continue, depending on how critical stderr is
+      }
 
-  return { ports, total, openCount, riskAssessment, recommendations };
+      const generatedData = stdout.replaceAll("\r\n", "\n").trim();
+      const openPortsList = generatedData
+        .slice(generatedData.indexOf("[") + 1, generatedData.indexOf("]"))
+        .split(",")
+        .map(p => p.trim());
+
+      const ports = {};
+      let openCount = openPortsList.length;
+
+      openPortsList.forEach((port) => {
+        ports[port] = {
+          port,
+          service: `Service ${port}`,
+          risk: (parseInt(port) % 2 === 0 ? "High" : "Low"),
+          description: `Port ${port} is open and running a service.`,
+        };
+      });
+
+      // Risk assessment (simplified)
+      let riskAssessment = "Low";
+      if (openCount > total * 0.3) riskAssessment = "High";
+      else if (openCount > total * 0.1) riskAssessment = "Medium";
+
+      const recommendations = [];
+      if (riskAssessment === "High") {
+        recommendations.push("Close unused open ports immediately.");
+      } else if (riskAssessment === "Medium") {
+        recommendations.push("Monitor open ports regularly.");
+      }
+
+      resolve({
+        ports,
+        total,
+        openCount,
+        riskAssessment,
+        recommendations,
+      });
+    });
+  });
 };
+
 
 export const portScanHandler = async (req, res) => {
   try {
-    const { host, startPort = 1, endPort = 1024 } = req.query;
+    const host = req.query.host;
+    console.log(host, !host)
+    if (!host) {
+      console.log(1)
+      return res.status(400).json({ error: "No link, domain or ip provided" });}
 
-    if (!host) return res.status(400).json({ error: "Host is required" });
+    const start = 0;
+    const end = 1024;
 
-    const start = parseInt(startPort, 10);
-    const end = parseInt(endPort, 10);
-
-    if (isNaN(start) || isNaN(end) || start < 1 || end > 65535 || start > end) {
+    if (isNaN(start) || isNaN(end) || start < 0 || end > 65535 || start > end) {
       return res.status(400).json({ error: "Invalid port range" });
     }
 
@@ -54,7 +82,7 @@ export const portScanHandler = async (req, res) => {
       return res
         .status(400)
         .json({
-          error: `Port range too large. Max ${maxRange} ports allowed. ${score} `,
+          error: `Port range too large. Max ${maxRange} ports allowed.`,
         });
     }
 
