@@ -1,5 +1,5 @@
 import SharePointScan from '../models/sharePointModel.js';
-// Simulated scan logic
+
 const simulateScan = (url) => {
   const version = "SharePoint Online";
   const versionSupported = true;
@@ -8,8 +8,8 @@ const simulateScan = (url) => {
   const externalSharing = "Limited";
   const permissionIssues = Math.floor(Math.random() * 6);
   const securityPatches = "Up to date";
-  const vulnerabilities = [];
-  const securityScore = 85;
+  const vulnerabilities = permissionIssues > 3 ? ["Over-permissive roles", "Missing MFA"] : [];
+  const securityScore = 85 - permissionIssues * 5;
 
   return {
     url,
@@ -21,16 +21,14 @@ const simulateScan = (url) => {
     permissionIssues,
     securityPatches,
     vulnerabilities,
-    securityScore
+    securityScore,
   };
 };
 
 export const scanSharePoint = async (req, res) => {
   try {
     const { url } = req.body;
-    if (!url) {
-      return res.status(400).json({ error: 'URL is required' });
-    }
+    if (!url) return res.status(400).json({ error: 'URL is required' });
 
     const result = simulateScan(url);
     const savedScan = new SharePointScan(result);

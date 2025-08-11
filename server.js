@@ -128,6 +128,7 @@ import keywordRouter from './routers/keywordRouter.js';
 
 import bruteForceRoutes from './routers/bruteForceRouter.js';
 
+import sourceCodeRoutes from "./routers/sourceCodeRoutes.js";
 
 
 
@@ -282,6 +283,8 @@ app.use('/api/dbscan', dbScanRouter);
 app.use('/api/keywords', keywordRouter);
 
 app.use('/api/bruteForce', bruteForceRoutes);
+
+app.use("/api", sourceCodeRoutes);
 
 
 

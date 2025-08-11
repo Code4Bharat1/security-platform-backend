@@ -1,6 +1,6 @@
+// controllers/wordpressController.js
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-
 import { WordPressScan } from '../models/wordpressModel.js';
 
 export const scanWordPress = async (req, res) => {
@@ -11,13 +11,14 @@ export const scanWordPress = async (req, res) => {
     const fullUrl = url.startsWith('http') ? url : `https://${url}`;
     const result = await performScan(fullUrl);
 
-    // Save scan result in DB (optional)
-    await WordPressScan.create({ url: fullUrl, ...result });
+    if (result.notWordPress) {
+      return res.status(200).json({ error: 'This is not a WordPress website.' });
+    }
 
+    await WordPressScan.create({ url: fullUrl, ...result });
     res.json(result);
   } catch (error) {
     console.error('WordPress scan error:', error.message);
-    console.error(error.stack);
     res.status(500).json({ error: 'Failed to scan WordPress site' });
   }
 };
@@ -35,7 +36,7 @@ async function performScan(url) {
     const $ = cheerio.load(html);
 
     if (!checkIfWordPress($, html)) {
-      throw new Error('Not a WordPress site');
+      return { notWordPress: true };
     }
 
     const version = extractWordPressVersion($, html);
@@ -53,12 +54,10 @@ async function performScan(url) {
     result.issues = vulns.issues;
     result.vulnerablePlugins = vulns.vulnerablePluginsCount;
     result.outdatedPlugins = vulns.outdatedPluginsCount;
-
     result.securityScore = calculateSecurityScore(result);
 
     return result;
   } catch (error) {
-    console.error('performScan error:', error.message);
     throw error;
   }
 }
@@ -68,8 +67,6 @@ function checkIfWordPress($, html) {
   return generatorMeta.toLowerCase().includes('wordpress');
 }
 
-// Placeholder utility functions — implement these based on your logic
-
 function extractWordPressVersion($, html) {
   const generatorMeta = $('meta[name="generator"]').attr('content') || '';
   const match = generatorMeta.match(/WordPress\s+([\d.]+)/i);
@@ -77,21 +74,22 @@ function extractWordPressVersion($, html) {
 }
 
 function isVersionSecure(version) {
-  // Example: return false if version < 5.8
   if (version === 'unknown') return false;
   const majorVersion = parseFloat(version);
   return majorVersion >= 5.8;
 }
 
 function extractThemeInfo($) {
-  // Example: look for theme stylesheet URL or meta tag
   const themeHref = $('link[rel="stylesheet"]').attr('href') || '';
   const match = themeHref.match(/themes\/([^\/]+)\//);
-  return match ? match[1] : 'unknown';
+  return {
+    name: match ? match[1] : 'unknown',
+    version: 'unknown',
+    secure: true,
+  };
 }
 
 function checkCommonVulnerabilities($, html) {
-  // Dummy implementation, replace with actual logic
   return {
     issues: [],
     vulnerablePluginsCount: 0,
@@ -100,7 +98,6 @@ function checkCommonVulnerabilities($, html) {
 }
 
 function calculateSecurityScore(result) {
-  // Dummy scoring logic
   let score = 100;
   score -= result.vulnerablePlugins * 20;
   score -= result.outdatedPlugins * 10;
