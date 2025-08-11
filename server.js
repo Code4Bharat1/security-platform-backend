@@ -284,11 +284,6 @@ app.use('/api/keywords', keywordRouter);
 
 app.use('/api/bruteForce', bruteForceRoutes);
 
-app.use("/api", sourceCodeRoutes);
-
-
-
-
 app.get('/', (req, res) => {
   res.status(200).send("API is running...")
 })

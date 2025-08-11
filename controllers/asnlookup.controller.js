@@ -13,7 +13,7 @@ export const lookupASN = async (req, res) => {
     if (data.error || !data.asn) {
       return res.status(404).json({ error: 'ASN info not found for this IP' });
     }
-
+    console.log(data.asn)
     const newRecord = new ASNLookup({
       ip,
       asn: data.asn,

@@ -1,19 +1,46 @@
 // controllers/clickjacking.controller.js
 import ClickjackingTest from '../models/clickjacking.model.js';
-import fetch from 'node-fetch';
+import axios from 'axios';
+import { URL } from 'url';
 
 export const testClickjacking = async (req, res) => {
-  const { url } = req.body;
+  let { url } = req.body;
   if (!url) return res.status(400).json({ error: 'URL is required' });
 
   try {
-    // Fetch the headers from the target URL
-    const response = await fetch(url, { method: 'HEAD' });
-    const headers = response.headers;
+    // Ensure URL starts with http/https
+    if (!/^https?:\/\//i.test(url)) {
+      url = `https://${url}`;
+    }
 
-    // Check common clickjacking protection headers
-    const xFrameOptions = headers.get('x-frame-options');
-    const contentSecurityPolicy = headers.get('content-security-policy');
+    // Validate the URL format
+    try {
+      new URL(url);
+    } catch {
+      return res.status(400).json({ error: 'Invalid URL format' });
+    }
+
+    // Make HEAD request with Axios
+    const response = await axios({
+      method: 'HEAD',
+      url,
+      maxRedirects: 5,
+      timeout: 8000,
+      validateStatus: () => true, // Accept all responses (even 4xx/5xx)
+    });
+
+    if (response.status >= 400) {
+      return res.status(400).json({
+        error: `Could not access site. Status code: ${response.status}`,
+      });
+    }
+
+    const headers = Object.fromEntries(
+      Object.entries(response.headers).map(([key, val]) => [key.toLowerCase(), val])
+    );
+
+    const xFrameOptions = headers['x-frame-options'];
+    const contentSecurityPolicy = headers['content-security-policy'];
 
     const protectedBy = [];
 
@@ -33,13 +60,13 @@ export const testClickjacking = async (req, res) => {
 
     await testRecord.save();
 
-    res.json({
+    res.status(200).json({
       url,
       isProtected,
       protectedBy,
     });
   } catch (error) {
-    console.error(error);
+    console.error('Clickjacking test error:', error.message);
     res.status(500).json({ error: 'Failed to fetch URL or analyze headers' });
   }
 };
