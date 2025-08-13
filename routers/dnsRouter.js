@@ -1,8 +1,8 @@
-// routes/dnsRoutes.js
-import express from 'express';
-import { resolveDNS } from '../controllers/dnsController.js';
-const router = express.Router();
+// routes/dnsRoutes.js (example)
+import { Router } from 'express';
+import { resolveDNS, reconScan } from '../controllers/dnsController.js';
 
-router.post('/resolve', resolveDNS);
-
+const router = Router();
+router.post('/dns/resolve', resolveDNS);
+router.post('/dns/recon-scan', reconScan);
 export default router;
