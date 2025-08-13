@@ -1,9 +1,12 @@
-// routers/scanRouter.js
 import express from 'express';
-import { runScan } from '../controllers/scanController.js'; // make sure path is correct
+import { runScan, getHistory } from '../controllers/scanController.js';
 
 const router = express.Router();
 
-router.post('/run-scan', runScan); // ✅ defines POST /api/scan/run-scan
+// POST /api/scan/run-scan
+router.post('/run-scan', runScan);
+
+// GET /api/scan/history
+router.get('/history', getHistory);
 
 export default router;

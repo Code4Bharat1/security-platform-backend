@@ -1,20 +1,37 @@
 // models/analyzeCodeModel.js
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
-const resultSchema = new mongoose.Schema({
-  message: { type: String, required: true },
-  passed: { type: Number, required: true },
-  failed: { type: Number, required: true },
-  results: { type: [String], default: [] },
-}, { _id: false });
+const issueSchema = new mongoose.Schema(
+  {
+    line: Number,
+    type: String,     // e.g., 'xss', 'sqli'
+    message: String,
+  },
+  { _id: false }
+);
 
-const analyzeCodeSchema = new mongoose.Schema({
-  code: { type: String, required: true },
-  results: { type: resultSchema, required: true },
-  lines: { type: Number, required: true },
-  fileLength: { type: Number, required: true },
-  createdAt: { type: Date, default: Date.now },
-});
+const resultSchema = new mongoose.Schema(
+  {
+    message: String,
+    passed: Number,
+    failed: Number,
+    issues: [issueSchema],
+  },
+  { _id: false }
+);
 
-// 👇 Optional: explicitly define the collection name
-export const CodeAnalysis = mongoose.model('CodeAnalysis', analyzeCodeSchema, 'codeanalyses');
+const analysisSchema = new mongoose.Schema(
+  {
+    code: { type: String, required: true },
+    results: resultSchema,
+    lines: Number,
+    fileLength: Number,
+  },
+  { timestamps: true, versionKey: false }
+);
+
+analysisSchema.index({ createdAt: -1 });
+
+export const CodeAnalysis =
+  mongoose.models.CodeAnalysis ||
+  mongoose.model("CodeAnalysis", analysisSchema);

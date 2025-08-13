@@ -1,49 +1,97 @@
-import { SubdomainResult } from '../models/subdomainModel.js';
+// controllers/subdomain.controller.js
 import axios from 'axios';
+import { SubdomainResult } from '../models/subdomainModel.js';
 
 export const findSubdomains = async (req, res) => {
-  const { domain } = req.body;
+  const { domain } = req.body || {};
   const API_KEY = process.env.SECURITYTRAILS_API_KEY;
-  console.log("Loaded API key:", API_KEY);
 
-  if (!domain) {
+  if (!domain?.trim()) {
     return res.status(400).json({ error: 'Domain is required.' });
   }
-  try {
-    // External API or mocked results
-    const response = await axios.get(`https://api.securitytrails.com/v1/domain/${domain}/subdomains`, {
-      headers: {
-        'APIKEY': API_KEY
-      },
-      timeout: 10000, // 10 seconds timeout
-    });
-
-    const subdomains = response.data.subdomains;
-
-    if (!Array.isArray(subdomains) || subdomains.length === 0) {
-      return res.status(200).json({ results: [] });
-    }
-
-    // Optional: Save to DB
-    const saved = await SubdomainResult.create({
-      domain,
-      results: subdomains.map((s) => ({ subdomain: s })),
-      timestamp: new Date(),
-    });
-
-    return res.status(200).json({ results: saved.results });
+  if (!API_KEY) {
+    return res.status(500).json({ error: 'SecurityTrails API key is missing on the server.' });
   }
 
-  catch (error) {
-    console.error('❌ Subdomain enumeration error:', error.message);
+  const startedAt = new Date();
+
+  try {
+    const resp = await axios.get(
+      `https://api.securitytrails.com/v1/domain/${domain}/subdomains`,
+      {
+        headers: { APIKEY: API_KEY },
+        timeout: 15000,
+      }
+    );
+
+    // SecurityTrails returns only labels; convert to FQDNs
+    const labels = Array.isArray(resp.data?.subdomains) ? resp.data.subdomains : [];
+    const fqdnList = [...new Set(labels.map(l => `${l}.${domain}`))].sort(); // uniq + sort
+
+    const finishedAt = new Date();
+    const durationMs = finishedAt - startedAt;
+
+    // Persist (optional but you asked to keep your basic model, so just set the new fields)
+    const saved = await SubdomainResult.create({
+      domain: domain.trim().toLowerCase(),
+      results: fqdnList.map(sub => ({ subdomain: sub })),
+      total: fqdnList.length,
+      startedAt,
+      finishedAt,
+      durationMs,
+      timestamp: finishedAt,
+    });
+
+    return res.status(200).json({
+      total: saved.total,
+      startedAt: saved.startedAt,
+      finishedAt: saved.finishedAt,
+      durationMs: saved.durationMs,
+      results: saved.results, // [{ subdomain }]
+    });
+  } catch (error) {
+    const finishedAt = new Date();
+    const durationMs = finishedAt - startedAt;
+
+    // Helpful error messages
     if (error.response) {
-      console.error('❌ API Error response:', error.response.status, error.response.data);
-    } else if (error.request) {
-      console.error('❌ No response received:', error.request);
-    } else {
-      console.error('❌ Error setting up request:', error.message);
+      const { status, data } = error.response;
+
+      // Common case: 401 when API key is invalid
+      if (status === 401) {
+        return res.status(502).json({
+          error: 'Upstream 401 from SecurityTrails. Check your API key or account limits.',
+          details: typeof data === 'string' ? data : (data?.message || data),
+          startedAt,
+          finishedAt,
+          durationMs,
+        });
+      }
+
+      return res.status(502).json({
+        error: `Upstream error from SecurityTrails (status ${status}).`,
+        details: typeof data === 'string' ? data : (data?.message || data),
+        startedAt,
+        finishedAt,
+        durationMs,
+      });
     }
 
-    return res.status(500).json({ error: 'Failed to fetch subdomains.' });
+    if (error.code === 'ECONNABORTED') {
+      return res.status(504).json({
+        error: 'SecurityTrails request timed out.',
+        startedAt,
+        finishedAt,
+        durationMs,
+      });
+    }
+
+    return res.status(500).json({
+      error: 'Failed to fetch subdomains.',
+      details: error.message,
+      startedAt,
+      finishedAt,
+      durationMs,
+    });
   }
 };

@@ -22,6 +22,7 @@
     "dotenv": "^16.6.1",
     "express": "^5.1.0",
     "fs": "^0.0.1-security",
+    "geoip-lite": "^1.4.10",
     "helmet": "^8.1.0",
     "jimp": "^1.6.0",
     "jsonwebtoken": "^9.0.2",
@@ -39,6 +40,7 @@
     "sharp": "^0.34.3",
     "ssl-checker": "^2.0.10",
     "tesseract.js": "^6.0.1",
+    "whois": "^2.15.0",
     "whois-json": "^2.0.4",
     "whoiser": "^2.0.0-beta.6",
     "winston": "^3.17.0"
