@@ -21,7 +21,7 @@ export const streamBrokenLinks = async (req, res) => {
     const anchorTags = root.querySelectorAll('a');
     const links = anchorTags
       .map(a => a.getAttribute('href'))
-      .filter(href => href && href.startsWith('http'));
+      .filter(link => link && (link.startsWith("https") || link.startsWith('http')));
 
     res.write(`data: ${JSON.stringify({ type: 'total', total: links.length })}\n\n`);
 
@@ -60,8 +60,11 @@ export const streamBrokenLinks = async (req, res) => {
 
     res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
     res.end();
+    console.log(2)
+
   } catch (error) {
     res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
     res.end();
+    console.log(1)
   }
 };
