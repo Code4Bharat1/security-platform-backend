@@ -1,9 +1,25 @@
-import express from "express";
+// routes/network.routes.js
+import { Router } from "express";
+import {
+  portScanHandler,
+  asnOverviewHandler,
+  asnDomainsHandler,
+  exportCsvHandler,
+} from "../controllers/portScanner.controller.js";
 
-import { portScanHandler } from "../controllers/portScanner.controller.js";
-const router = express.Router();
+const r = Router();
 
-// GET /api/portScan?host=example.com&startPort=80&endPort=100
-router.get("/portScan", portScanHandler);
+// Port scanning
+r.get("/port-scan", portScanHandler);
 
-export default router;
+// ASN info
+r.get("/asn/:asn", asnOverviewHandler);
+r.get("/asn/:asn/domains", asnDomainsHandler);
+
+r.get("/portScan", portScanHandler);
+r.get("/portscan", portScanHandler);
+
+// CSV export
+r.post("/export/csv", exportCsvHandler);
+
+export default r;

@@ -1,8 +1,6 @@
+// routes/openRedirect.routes.js
 import express from 'express';
-import { testOpenRedirect } from '../controllers/openRedirectController.js';
-//
+import { testOpenRedirectAdvanced } from '../controllers/openRedirectController.js';
 const router = express.Router();
-
-router.post('/openRedirect-tester', testOpenRedirect);
-
+router.post('/openRedirect-tester-advanced', testOpenRedirectAdvanced);
 export default router;
