@@ -85,7 +85,7 @@ function scanJavaScriptLike(code, language) {
         fix: FIX.XSS_REACT_DANGEROUS,
       });
     }
-    if (language === "vue" && /v-html\s*=/.test(t)) {
+    if (language === "vue" && /\bv-html\s*=/.test(t)) {
       addIssue(issues, {
         line: idx + 1,
         snippet: line,
@@ -107,7 +107,8 @@ function scanJavaScriptLike(code, language) {
         fix: FIX.EVAL,
       });
     }
-    if (/set(Time|Inter)val\s*\(\s*['"]/.test(t)) {
+    // FIX: correctly detect string-based setTimeout / setInterval
+    if (/set(?:Timeout|Interval)\s*\(\s*['"]/.test(t)) {
       addIssue(issues, {
         line: idx + 1,
         snippet: line,
@@ -130,8 +131,11 @@ function scanSQLiHeuristics(code) {
   lines.forEach((line, idx) => {
     if (!selectRegex.test(line)) return;
 
-    // crude concat hints across JS/PHP-ish styles
-    const likelyConcat = /["']\s*[+.]?\s*\w|\$\w+/.test(line);
+    // heuristics for concatenation of variables into SQL
+    const likelyConcat =
+      /(["'`]\s*\+\s*\w)|(\$\w+\s*\.)|(\+\s*\w+\s*\+)/.test(line) ||
+      /\bWHERE\b[^;]*([=<>]\s*["'`]\s*\+|\$\w+)/i.test(line);
+
     const severity = likelyConcat ? SEVERITY.Critical : SEVERITY.High;
     const message = likelyConcat
       ? "Possible SQL injection: query appears to concatenate variables into SQL."
@@ -157,7 +161,7 @@ function analyzeStatic(code, language = "javascript") {
   if (["javascript", "typescript", "react", "vue"].includes(lang)) {
     issues = issues.concat(scanJavaScriptLike(code, lang));
   }
-  // scan for SQL strings in any language (incl. PHP)
+  // Always scan for SQL-like patterns
   issues = issues.concat(scanSQLiHeuristics(code));
 
   // dedupe (line + message)
@@ -174,7 +178,7 @@ function analyzeStatic(code, language = "javascript") {
   return { issues, riskScore, riskBand };
 }
 
-// ---- Controller (NO Feedback model used) ----
+// ---- Controller ----
 export const analyzeCode = async (req, res) => {
   try {
     const { code, language = "javascript" } = req.body || {};
@@ -184,10 +188,10 @@ export const analyzeCode = async (req, res) => {
 
     const { issues, riskScore, riskBand } = analyzeStatic(code, language);
 
-    // Try to save, but don't fail the response if schema is strict and rejects extra fields
+    // Save non-fatal
     let analysisId = null;
     try {
-      const saved = await Analysis.create({ code, issues, riskScore, riskBand });
+      const saved = await Analysis.create?.({ code, issues, riskScore, riskBand });
       analysisId = saved?._id?.toString?.() || null;
     } catch (saveErr) {
       console.warn("Analysis save skipped (schema may be strict):", saveErr?.message);
