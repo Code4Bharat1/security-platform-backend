@@ -1,9 +1,9 @@
 // routers/nexposeRouter.js
 import express from "express";
-import { scanForSQLi } from "../controllers/nexposeController.js";
+import { scanSQLi } from "../controllers/sqliController.js";
 
 const router = express.Router();
 
-router.post("/", scanForSQLi);
+router.post("/sql", scanSQLi);
 
 export default router;
