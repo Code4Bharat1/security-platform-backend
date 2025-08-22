@@ -32,10 +32,6 @@ def main():
     
     args = parser.parse_args()
 
-    if not is_valid_url(args.url):
-        print("[!] Invalid URL. Must start with http:// or https://")
-        return
-
     generate_qr(args.url, args.save)
 
 if __name__ == "__main__":
