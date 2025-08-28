@@ -88,7 +88,7 @@ import nexposeRoutes from './routers/nexposeRouter.js';
 
 import mdrMonitorRouter from "./routers/mdrMonitorRouter.js";
 
-import folderThreatScanRoutes from './routers/folderThreatScanRouter.js';
+import fileScannerRoutes from "./routers/fileScannerRouter.js";
 
 import scanUSBRoutes from "./routers/usbScannerRoutes.js";
 
@@ -246,7 +246,7 @@ app.use('/api/nexpose', nexposeRoutes);
 
 app.use("/api/mdr-monitor", mdrMonitorRouter);
 
-app.use("/api/folder-scan", folderThreatScanRoutes);
+app.use("/api/file-scan", fileScannerRoutes);
 
 app.use("/api/scan-usb", scanUSBRoutes);
 
