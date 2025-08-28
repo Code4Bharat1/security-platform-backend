@@ -1,95 +1,89 @@
+// controllers/jwtSignature.controller.js
 import jwt from "jsonwebtoken";
 import JWTSignature from "../models/jwtsignature.model.js";
 
+const ALLOWED_ALGS = [
+  "HS256","HS384","HS512",
+  "RS256","RS384","RS512",
+  "ES256","ES384","ES512",
+];
+
 export const validateJWT = async (req, res) => {
-  console.log("=== JWT VALIDATION DEBUG ===");
-  console.log("Full request body:", JSON.stringify(req.body, null, 2));
+  const { token, secret, algorithm = "auto" } = req.body;
 
-  const { token, secret } = req.body;
-
-  // Input validation
   if (!token || !secret) {
-    console.log("❌ Missing token or secret");
-    return res.status(400).json({ error: "Token and secret are required" });
+    return res.status(400).json({ error: "Token and secret/key are required" });
   }
-           
-  // Trim whitespace
-  const cleanToken = token.trim();
-  const cleanSecret = secret.trim();
 
-  console.log("🔍 Token length:", cleanToken.length);
-  console.log("🔍 Secret:", cleanSecret);
-  console.log(
-    "🔍 Token (first 50 chars):",
-    cleanToken.substring(0, 50) + "..."
-  );
-  console.log("🔍 Token parts count:", cleanToken.split(".").length);
+  const cleanToken = String(token).trim();
+  const cleanSecret = String(secret).trim();
 
-  // Basic JWT format validation
-  if (!cleanToken.includes(".")) {
-    console.log("❌ Invalid JWT format - no dots found");
+  const parts = cleanToken.split(".");
+  if (parts.length !== 3) {
     return res
       .status(400)
-      .json({
-        error: "Invalid JWT format. JWT should have 3 parts separated by dots.",
-      });
+      .json({ error: `Invalid JWT format. Found ${parts.length} parts, expected 3.` });
   }
 
-  const tokenParts = cleanToken.split(".");
-  if (tokenParts.length !== 3) {
-    console.log(
-      "❌ Invalid JWT format - found",
-      tokenParts.length,
-      "parts instead of 3"
+  // Decode header to know what alg the token claims
+  let headerFromToken;
+  try {
+    headerFromToken = JSON.parse(
+      Buffer.from(parts[0], "base64url").toString("utf8")
     );
-    return res
-      .status(400)
-      .json({
-        error: `Invalid JWT format. Found ${tokenParts.length} parts, expected 3. ${score} `,
+  } catch {
+    return res.status(400).json({ error: "Unable to decode JWT header" });
+  }
+
+  // Reject alg=none explicitly (insecure)
+  if (String(headerFromToken.alg || "").toUpperCase() === "NONE" ||
+      String(headerFromToken.alg || "").toUpperCase() === "NONE") {
+    return res.status(400).json({ error: "Insecure token (alg=none) is not allowed" });
+  }
+
+  // Build verification options
+  const opts = { complete: true };
+
+  if (algorithm !== "auto") {
+    if (!ALLOWED_ALGS.includes(algorithm)) {
+      return res.status(400).json({ error: `Unsupported algorithm: ${algorithm}` });
+    }
+    opts.algorithms = [algorithm];
+  } else {
+    // lock to the token's declared alg to avoid alg confusion
+    const declared = String(headerFromToken.alg || "").toUpperCase();
+    if (!ALLOWED_ALGS.includes(declared)) {
+      return res.status(400).json({ error: `Unsupported or missing alg in token header: ${declared || "N/A"}` });
+    }
+    opts.algorithms = [declared];
+  }
+
+  // If algorithm is asymmetric, secret must be a PEM public key/cert
+  const isAsymmetric = /^(RS|ES)/.test(opts.algorithms[0]);
+  if (isAsymmetric) {
+    const looksLikePEM = /-----BEGIN (PUBLIC KEY|CERTIFICATE)-----/.test(cleanSecret);
+    if (!looksLikePEM) {
+      return res.status(400).json({
+        error: `For ${opts.algorithms[0]}, provide a PEM-formatted public key or certificate.`,
       });
+    }
   }
 
-  // Test with jwt.io standard token first
-  console.log("🧪 Testing with known working token...");
-  const testToken =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
-  const testSecret = "your-256-bit-secret";
-
   try {
-    const testResult = jwt.verify(testToken, testSecret, { complete: true });
-    console.log("✅ Test token validation successful");
-  } catch (testErr) {
-    console.log("❌ Test token failed:", testErr.message);
-  }
+    const verified = jwt.verify(cleanToken, cleanSecret, opts); // throws if invalid
+    const { header, payload } = verified;
 
-  // Now try the actual token
-  try {
-    console.log("🔐 Attempting to verify actual token...");
-
-    // Try without complete: true first
-    const decoded = jwt.verify(cleanToken, cleanSecret, { complete: true });
-
-    console.log("✅ JWT verification successful!");
-    console.log("Header:", JSON.stringify(decoded.header, null, 2));
-    console.log("Payload:", JSON.stringify(decoded.payload, null, 2));
-
-    const { header, payload } = decoded;
-
-    // Save successful validation attempt in DB
+    // Save success (non-blocking)
     try {
-      const log = new JWTSignature({
+      await new JWTSignature({
         token: cleanToken,
         secret: cleanSecret,
         valid: true,
         header,
         payload,
-      });
-      await log.save();
-      console.log("✅ Saved to database successfully");
-    } catch (dbError) {
-      console.error("⚠️ Database save error:", dbError.message);
-      // Continue execution even if DB save fails
-    }
+        algorithm: opts.algorithms[0],
+      }).save();
+    } catch (_) {}
 
     return res.json({
       message: "JWT signature is valid",
@@ -97,49 +91,24 @@ export const validateJWT = async (req, res) => {
       payload,
     });
   } catch (err) {
-    console.error("❌ JWT validation error details:");
-    console.error("Error name:", err.name);
-    console.error("Error message:", err.message);
-    console.error("Full error:", err);
-
-    // Try to decode without verification to see the token content
+    // Save failure (non-blocking)
     try {
-      const decoded = jwt.decode(cleanToken, { complete: true });
-      // console.log("🔍 Token decoded without verification:");
-      // console.log("Header:", JSON.stringify(decoded.header, null, 2));
-      // .log("Payload:", JSON.stringify(decoded.payload, null, 2));
-    } catch (decodeErr) {
-      console.error("❌ Cannot even decode token:", decodeErr.message);
-    }
-
-    // Save failed validation attempt in DB
-    try {
-      const log = new JWTSignature({
+      await new JWTSignature({
         token: cleanToken,
         secret: cleanSecret,
         valid: false,
-      });
-      await log.save();
-    } catch (dbError) {
-      console.error("⚠️ Database save error:", dbError.message);
-    }
+        algorithm: opts.algorithms?.[0],
+        error: err.message,
+      }).save();
+    } catch (_) {}
 
-    // Provide more specific error messages
     let errorMessage = "Invalid JWT signature or token";
-
-    if (err.name === "TokenExpiredError") {
-      errorMessage = "JWT token has expired";
-    } else if (err.name === "JsonWebTokenError") {
-      if (err.message.includes("invalid signature")) {
-        errorMessage = "Invalid JWT signature - check your secret key";
-      } else if (err.message.includes("malformed")) {
-        errorMessage = "Malformed JWT token";
-      } else {
-        errorMessage = `JWT Error: ${err.message}`;
-      }
-    } else if (err.name === "NotBeforeError") {
-      errorMessage = "JWT token is not active yet";
-    }
+    if (err.name === "TokenExpiredError") errorMessage = "JWT token has expired";
+    else if (err.name === "JsonWebTokenError") {
+      if (err.message.includes("invalid signature")) errorMessage = "Invalid JWT signature - check your secret/key";
+      else if (err.message.includes("malformed")) errorMessage = "Malformed JWT token";
+      else errorMessage = `JWT Error: ${err.message}`;
+    } else if (err.name === "NotBeforeError") errorMessage = "JWT token is not active yet";
 
     return res.status(400).json({ error: errorMessage });
   }

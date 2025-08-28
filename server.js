@@ -130,6 +130,11 @@ import bruteForceRoutes from './routers/bruteForceRouter.js';
 
 import sourceCodeRoutes from "./routers/sourceCodeRoutes.js";
 
+import passwordStrength from './routers/passwordStrengthRoutes.js';
+import domainToIp from './routers/domainToIp.js';
+
+// import wiresharkRoutes from './routers/wireSharkRoutes.js';
+
 
 
 
@@ -283,6 +288,12 @@ app.use('/api/dbscan', dbScanRouter);
 app.use('/api/keywords', keywordRouter);
 
 app.use('/api/bruteForce', bruteForceRoutes);
+
+app.use('/api/password', passwordStrength);
+
+app.use('/api/domain',domainToIp);
+
+// app.use('/api/wire',wiresharkRoutes);
 
 app.get('/', (req, res) => {
   res.status(200).send("API is running...")

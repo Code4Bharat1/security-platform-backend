@@ -3,6 +3,7 @@
 import { CodeAnalysis } from "../models/analyzeCodeModel.js";
 export const analyzeCode = async (req, res) => {
   const { code } = req.body;
+  console.log(code , "##")
 
   if (!code || typeof code !== 'string') {
     return res.status(400).json({ error: 'Code must be a string.' });
