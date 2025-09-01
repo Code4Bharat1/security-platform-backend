@@ -1,8 +1,9 @@
 // controllers/fileScannerController.js
+
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import fetch from "node-fetch";
+import axios from "axios";  // Import axios
 
 // Helper: calculate hash
 const calculateHash = (filePath, algorithm) => {
@@ -63,30 +64,26 @@ export const scanFile = async (req, res) => {
     let engines = "0/70";
     let malwareFamily = "N/A";
 
-    try {
-      const vtResponse = await fetch(`https://www.virustotal.com/api/v3/files/${sha256}`, {
-        headers: { "x-apikey": process.env.VIRUSTOTAL_API_KEY }
-      });
+   try {
+  const vtResponse = await axios.get(`https://www.virustotal.com/api/v3/files/${sha256}`, {
+    headers: {
+      "x-apikey": process.env.VIRUSTOTAL_API_KEY,
+    },
+  });
 
-      if (vtResponse.ok) {
-        const vtData = await vtResponse.json();
-        const stats = vtData.data.attributes.last_analysis_stats;
+  if (vtResponse.status === 200) {
+    console.log("File found in VirusTotal database.");
+  } else {
+    console.error("File not found in VirusTotal database.");
+  }
+} catch (err) {
+  console.error("⚠️ VirusTotal API error:", err.response ? err.response.data : err.message);
+  res.status(500).json({
+    error: "Failed to scan file with VirusTotal",
+    details: err.response ? err.response.data : err.message,
+  });
+}
 
-        const positives = stats.malicious + stats.suspicious;
-        const total = Object.values(stats).reduce((a, b) => a + b, 0);
-
-        engines = `${positives}/${total}`;
-        threatScore = Math.min(100, (positives / total) * 100);
-
-        if (positives === 0) detectionStatus = "Clean";
-        else if (positives < 5) detectionStatus = "Suspicious";
-        else detectionStatus = "Malicious";
-
-        malwareFamily = vtData.data.attributes.popular_threat_classification?.suggested_threat_label || "N/A";
-      }
-    } catch (err) {
-      console.error("⚠️ VirusTotal API error:", err.message);
-    }
 
     // Color coding
     let color = "green";

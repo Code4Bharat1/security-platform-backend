@@ -6,12 +6,26 @@ import dns from 'dns';
 export const analyzeSEO = async (req, res) => {
   try {
     const { url } = req.body;
+    
+    // Validate URL
     if (!url) {
       return res.status(400).json({ message: 'URL is required' });
     }
+    
+    // Check if the URL is valid
+    try {
+      new URL(url);  // Will throw an error if the URL is invalid
+    } catch (error) {
+      return res.status(400).json({ message: 'Invalid URL format' });
+    }
 
-    // Fetch HTML content
-    const response = await fetch(url, { timeout: 15000 });
+    // Fetch HTML content with timeout
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Request timed out')), 15000)
+    );
+    
+    const response = await Promise.race([fetch(url), timeoutPromise]);
+    
     if (!response.ok) {
       return res.status(400).json({ message: 'Failed to fetch the website content' });
     }
@@ -72,9 +86,9 @@ export const analyzeSEO = async (req, res) => {
       });
     });
 
-    // Check if already cached
+    // Check if already cached and if cache is expired (24 hours expiration)
     let existing = await SeoResult.findOne({ url });
-    if (existing) {
+    if (existing && (Date.now() - existing.timestamp) < 24 * 60 * 60 * 1000) {
       return res.json({
         message: 'SEO analysis (cached)',
         url,
@@ -103,7 +117,8 @@ export const analyzeSEO = async (req, res) => {
       issues,
       strengths,
       pageSizeKB,
-      mobileFriendly
+      mobileFriendly,
+      timestamp: Date.now()  // Add timestamp for cache expiration
     });
     await result.save();
 

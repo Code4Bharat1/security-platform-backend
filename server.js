@@ -251,7 +251,7 @@ app.use('/api/nexpose', nexposeRoutes);
 
 app.use("/api/mdr-monitor", mdrMonitorRouter);
 
-app.use("/api/file-scan", fileScannerRoutes);
+app.use("/api/file", fileScannerRoutes);
 
 app.use("/api/scan-usb", scanUSBRoutes);
 

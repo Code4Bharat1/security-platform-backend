@@ -1,11 +1,15 @@
 // routers/fileScannerRouter.js
-import express from "express";
+
+import { Router } from "express";
 import multer from "multer";
-import { scanFile } from "../controllers/fileScannerController.js";
+import { scanFile } from "../controllers/fileScannerController.js";  // Correct ES module import
 
-const router = express.Router();
-const upload = multer({ dest: "uploads/" });
+const router = Router();
 
-router.post("/", upload.single("file"), scanFile);
+// Set up Multer for file upload
+const upload = multer({ dest: "uploads/" });  // Store files in "uploads" folder
+
+// Define the route for scanning files
+router.post("/scan", upload.single("file"), scanFile);  // Expect a single file uploaded with the field name "file"
 
 export default router;

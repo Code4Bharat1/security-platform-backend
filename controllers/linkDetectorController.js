@@ -351,12 +351,12 @@ export async function analyzeUrl(url) {
   })();
 
   const shortenerExpanded = isShortener(host);
-  const typosquatOf = simpleTyposquatCheck(host);
+  const typosquatOf = simpleTyposquatCheck(host) || "No typosquatting detected"; // Fixed to prevent blank
   const maliciousPattern = containsMaliciousPattern(finalUrl);
   const domainBad = domainIsBad(host);
 
   if (maliciousPattern) evidence.push({ name: "maliciousPattern", value: true });
-  if (typosquatOf) evidence.push({ name: "typosquatOf", value: typosquatOf });
+  if (typosquatOf !== "No typosquatting detected") evidence.push({ name: "typosquatOf", value: typosquatOf });
   if (shortenerExpanded) evidence.push({ name: "shortenerExpanded", value: true });
 
   // DNS / IP / Geo
@@ -435,6 +435,7 @@ export async function analyzeUrl(url) {
     screenshotPath,
   };
 }
+
 
 // ---- Express handlers ----
 export const scanLink = async (req, res) => {
