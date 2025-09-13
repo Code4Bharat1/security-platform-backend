@@ -136,6 +136,8 @@ import domainToIp from './routers/domainToIp.js';
 // import wiresharkRoutes from './routers/wireSharkRoutes.js';
 
 
+import blogs from './routers/blogs.js';
+
 
 
 const app = express();
@@ -178,6 +180,8 @@ app.use('/api/keyword', keywordRoutes);
 app.use('/api/speed', speedRoutes);
 
 app.use('/api/meta', metaAnalyzeRoutes);
+
+app.use('/api/blogs', blogs);
 
 app.use('/api/auth', oauthTokenRoutes);
 
