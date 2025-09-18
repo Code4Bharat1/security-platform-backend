@@ -129,14 +129,14 @@ import keywordRouter from './routers/keywordRouter.js';
 import bruteForceRoutes from './routers/bruteForceRouter.js';
 
 import sourceCodeRoutes from "./routers/sourceCodeRoutes.js";
-
+import handler from './routers/image-proxy.js';
 import passwordStrength from './routers/passwordStrengthRoutes.js';
 import domainToIp from './routers/domainToIp.js';
 
 // import wiresharkRoutes from './routers/wireSharkRoutes.js';
 
 
-import blogs from './routers/blogs.js';
+import blogs from './routers/blogs.router.js';
 
 
 
@@ -297,6 +297,7 @@ app.use('/api/password', passwordStrength);
 
 app.use('/api/domain',domainToIp);
 
+app.use('/api', handler)
 // app.use('/api/wire',wiresharkRoutes);
 
 app.get('/', (req, res) => {
