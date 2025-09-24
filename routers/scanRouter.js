@@ -9,4 +9,5 @@ router.post('/run-scan', runScan);
 // GET /api/scan/history
 router.get('/history', getHistory);
 
+
 export default router;
