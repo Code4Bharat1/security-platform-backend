@@ -2,11 +2,11 @@
 // OR app/api/hacker-news/route.js (for Next.js 13+ App Router)
 
 // For Next.js 13+ App Router
+// For Next.js 13+ App Router
 export async function GET() {
   try {
     console.log('Fetching news from The Hacker News...');
     
-    // The correct RSS feed URL for thehackernews.com
     const rssUrl = 'https://feeds.feedburner.com/TheHackersNews';
     
     const response = await fetch(rssUrl, {
@@ -16,7 +16,7 @@ export async function GET() {
         'Accept': 'application/rss+xml, application/xml, text/xml',
         'Cache-Control': 'no-cache'
       },
-      next: { revalidate: 0 } // Disable caching
+      next: { revalidate: 0 }
     });
 
     if (!response.ok) {
@@ -26,9 +26,7 @@ export async function GET() {
     const xmlData = await response.text();
     console.log('XML Data length:', xmlData.length);
 
-    // Simple XML parsing without external libraries
     const parseXML = (xmlString) => {
-      // Extract items from RSS feed
       const itemPattern = /<item>([\s\S]*?)<\/item>/g;
       const items = [];
       let match;
@@ -52,14 +50,22 @@ export async function GET() {
         const pubDateMatch = itemContent.match(/<pubDate>(.*?)<\/pubDate>/);
         const pubDate = pubDateMatch ? pubDateMatch[1] : new Date().toISOString();
         
-        // Extract image from description
-        let imageUrl = "/blogs/3.png";
-        const imgMatch = description.match(/<img[^>]+src=["']([^"']+)["'][^>]*>/i);
-        if (imgMatch) {
-          imageUrl = imgMatch[1];
+        // Extract image from enclosure tag (FIXED)
+        let imageUrl = "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgVlzRvr9tBHSRQqe_2jj8SrExmcCFhoLUrrMI4GzbM0-GggNMW0BTO02GXh8i_ShmsUpEJyy85FIPBXIbXwMjR68D30ldhn8osa8zG-wKqJu6KDR3Kuri6sd9GXMbhyannAnOJEQMY4tsxJ26pXPujtzzC-8U-kncd-YNj6LfRgiETNHccmSwQQY0zh3gQ/s1600/chrome.png";
+        const enclosureMatch = itemContent.match(/<enclosure[^>]+url=["']([^"']+)["'][^>]*>/i);
+        if (enclosureMatch) {
+          imageUrl = enclosureMatch[1];
+          console.log('Found enclosure image:', imageUrl);
+        } else {
+          // Fallback: try to extract from description if enclosure not found
+          const imgMatch = description.match(/<img[^>]+src=["']([^"']+)["'][^>]*>/i);
+          if (imgMatch) {
+            imageUrl = imgMatch[1];
+            console.log('Found description image:', imageUrl);
+          }
         }
         
-        // Clean description - remove HTML tags and limit length
+        // Clean description
         const cleanDescription = description
           .replace(/<[^>]*>/g, '')
           .replace(/&nbsp;/g, ' ')
@@ -89,6 +95,7 @@ export async function GET() {
     if (articles.length > 0) {
       const latestArticle = articles[0];
       console.log('Latest article:', latestArticle.title);
+      console.log('Latest article image:', latestArticle.image);
       
       return Response.json({
         success: true,
@@ -109,15 +116,14 @@ export async function GET() {
       article: {
         title: "Latest Cybersecurity News",
         description: "Unable to fetch latest news. Stay updated with the latest cybersecurity threats and vulnerabilities by visiting The Hacker News directly.",
-        image: "/blogs/3.png",
+        image: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgVlzRvr9tBHSRQqe_2jj8SrExmcCFhoLUrrMI4GzbM0-GggNMW0BTO02GXh8i_ShmsUpEJyy85FIPBXIbXwMjR68D30ldhn8osa8zG-wKqJu6KDR3Kuri6sd9GXMbhyannAnOJEQMY4tsxJ26pXPujtzzC-8U-kncd-YNj6LfRgiETNHccmSwQQY0zh3gQ/s1600/chrome.png",
         link: "https://thehackernews.com/",
         publishedAt: new Date().toISOString(),
         source: 'The Hacker News (Fallback)'
       }
-    }, { status: 200 }); // Return 200 even on error to show fallback
+    }, { status: 200 });
   }
 }
-
 // For Next.js 12 and below (pages/api/hacker-news.js)
 export const blogs = async (req, res) => {
   if (req.method !== 'GET') {
@@ -169,7 +175,7 @@ export const blogs = async (req, res) => {
         const pubDateMatch = itemContent.match(/<pubDate>(.*?)<\/pubDate>/);
         const pubDate = pubDateMatch ? pubDateMatch[1] : new Date().toISOString();
         
-        let imageUrl = "/blogs/3.png";
+        let imageUrl = "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgVlzRvr9tBHSRQqe_2jj8SrExmcCFhoLUrrMI4GzbM0-GggNMW0BTO02GXh8i_ShmsUpEJyy85FIPBXIbXwMjR68D30ldhn8osa8zG-wKqJu6KDR3Kuri6sd9GXMbhyannAnOJEQMY4tsxJ26pXPujtzzC-8U-kncd-YNj6LfRgiETNHccmSwQQY0zh3gQ/s1600/chrome.png";
         const imgMatch = description.match(/<img[^>]+src=["']([^"']+)["'][^>]*>/i);
         if (imgMatch) {
           imageUrl = imgMatch[1];
@@ -223,8 +229,8 @@ export const blogs = async (req, res) => {
       error: error.message,
       article: {
         title: "Latest Cybersecurity News",
-        description: "Unable to fetch latest news. Stay updated with the latest cybersecurity threats and vulnerabilities by visiting The Hacker News directly.",
-        image: "/blogs/3.png",
+        description: "Unable to fetch latest news. Stay updated with   the latest cybersecurity threats and vulnerabilities by visiting The Hacker News directly.",
+        image: "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgVlzRvr9tBHSRQqe_2jj8SrExmcCFhoLUrrMI4GzbM0-GggNMW0BTO02GXh8i_ShmsUpEJyy85FIPBXIbXwMjR68D30ldhn8osa8zG-wKqJu6KDR3Kuri6sd9GXMbhyannAnOJEQMY4tsxJ26pXPujtzzC-8U-kncd-YNj6LfRgiETNHccmSwQQY0zh3gQ/s1600/chrome.png",
         link: "https://thehackernews.com/",
         publishedAt: new Date().toISOString(),
         source: 'The Hacker News (Fallback)'

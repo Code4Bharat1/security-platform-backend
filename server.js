@@ -69,10 +69,21 @@ import osintRouter from './routers/osintRouter.js';
 import dbScanRouter from './routers/dbScanRouter.js';
 import keywordRouter from './routers/keywordRouter.js';
 import bruteForceRoutes from './routers/bruteForceRouter.js';
-import sourceCodeRoutes from './routers/sourceCodeRoutes.js';
+
+import sourceCodeRoutes from "./routers/sourceCodeRoutes.js";
+// import handler from './routers/image-proxy.js';
 import passwordStrength from './routers/passwordStrengthRoutes.js';
+
 import domainToIp from './routers/domainToIp.js';
-import blogs from './routers/blogs.js';
+
+import feedback from './routers/feedbackRouter.js'
+// import wiresharkRoutes from './routers/wireSharkRoutes.js';
+
+import schedulemetting from './routers/schedulemeetingRoutes.js';
+
+import blogs from './routers/blogs.router.js';
+
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -192,7 +203,12 @@ app.use('/api/bruteForce', bruteForceRoutes);
 app.use('/api/password', passwordStrength);
 app.use('/api/domain', domainToIp);
 
-// Test route
+app.use('/api/domain',domainToIp);
+
+app.use('/api/feedback',feedback);
+
+app.use('/api/schedulemeeting',schedulemetting);
+
 app.get('/', (req, res) => {
   res.status(200).send("API is running...");
 });
