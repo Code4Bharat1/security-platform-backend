@@ -137,6 +137,7 @@ import domainToIp from './routers/domainToIp.js';
 import feedback from './routers/feedbackRouter.js'
 // import wiresharkRoutes from './routers/wireSharkRoutes.js';
 
+import schedulemetting from './routers/schedulemeetingRoutes.js';
 
 import blogs from './routers/blogs.router.js';
 
@@ -299,9 +300,9 @@ app.use('/api/password', passwordStrength);
 
 app.use('/api/domain',domainToIp);
 
-app.use('/api/feedback',feedback)
-// app.use('/api', handler)
-// app.use('/api/wire',wiresharkRoutes);
+app.use('/api/feedback',feedback);
+
+app.use('/api/schedulemeeting',schedulemetting);
 
 app.get('/', (req, res) => {
   res.status(200).send("API is running...")
