@@ -9,25 +9,34 @@ const vulnerabilitySchema = new mongoose.Schema({
   recommendation: String
 }, { _id: false });
 
-// Keep headers flexible, but allow nested objects like cookies/csp/_benchmark
-// Mixed is fine for your use-case.
 const scanResultSchema = new mongoose.Schema({
   domain: { type: String, index: true },
-  timestamp: { type: Date, index: true },    // ← better as Date for sorting
+  timestamp: { type: Date, index: true },
   ssl: mongoose.Schema.Types.Mixed,
-  headers: mongoose.Schema.Types.Mixed,
+  headers: {
+    type: Object,
+    default: {},
+    // ✅ This ensures proper serialization
+  },
   openPorts: mongoose.Schema.Types.Mixed,
   vulnerabilities: [vulnerabilitySchema],
   vulnerabilityCount: Number,
   riskLevel: String,
   timespan: { type: Number, default: 0 },
-
-  // NEW: persist your added features
-  sitemap: mongoose.Schema.Types.Mixed,       // { present, url, summary: { ... } }
-  robots: mongoose.Schema.Types.Mixed,        // { present, allowsAll, disallowCount }
-  htmlAnalysis: mongoose.Schema.Types.Mixed   // { formsFound, passwordFields, ... }
+  sitemap: mongoose.Schema.Types.Mixed,
+  robots: mongoose.Schema.Types.Mixed,
+  htmlAnalysis: mongoose.Schema.Types.Mixed
 }, {
-  strict: true
+  strict: false,  // ✅ Allow flexible nested fields
+  minimize: false // ✅ Keep empty objects/arrays
+});
+
+scanResultSchema.pre('save', function (next) {
+  // Convert headers object to plain object if it exists
+  if (this.headers && typeof this.headers === 'object') {
+    this.headers = JSON.parse(JSON.stringify(this.headers));
+  }
+  next();
 });
 
 export default mongoose.models.ScanResult || mongoose.model('ScanResult', scanResultSchema);

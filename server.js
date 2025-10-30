@@ -122,18 +122,18 @@ await connectDB();
 // Global Login + Credits
 const TOOL_COST = 1;
 const toolRoutes = [
-  '/api/dns', '/api/waf', '/api/scan', '/api/sharepoint', '/api/wordpress',
-  '/api/sitemap', '/api/brokenlink', '/api/keyword', '/api/speed', '/api/meta',
+  '/api/waf', '/api/sharepoint', '/api/wordpress',
+  '/api/sitemap', '/api/keyword', '/api/speed', '/api/meta',
   '/api/jwtsign', '/api/clickjacking', '/api/http', '/api/port-scanner', '/api/asnLookup',
   '/api/mocha', '/api/reverse', '/api/csrf', '/api/regex', '/api/session',
-  '/api/whois', '/api/subdomain', '/api/xssTester', '/api/secretKeyScanner', '/api/openRedirectTester',
+  '/api/whois', '/api/xssTester', '/api/secretKeyScanner', '/api/openRedirectTester',
   '/api/code', '/api/analysis', '/api/sonar', '/api/analyze', '/api/apiTest',
   '/api/fingerprint', '/api/brokenAccess', '/api/ssrf', '/api/sensitiveFile', '/api/link-detector',
   '/api/securecrypt', '/api/nexpose', '/api/mdr-monitor', '/api/file', '/api/scan-usb',
   '/api/data-leak', '/api/socialPrivacy', '/api/fakeSoftware', '/api/whatsapp-privacy-inspector',
   '/api/email-attachment', '/api/ipinfo', '/api/permissions', '/api/port-activity', '/api/qr',
   '/api/seo', '/api/osint', '/api/dbscan', '/api/keywords', '/api/bruteForce',
-  '/api/password', '/api/domain'
+  '/api/domain'
 ];
 
 // Apply login & credits check to all tool routes
@@ -203,11 +203,11 @@ app.use('/api/bruteForce', bruteForceRoutes);
 app.use('/api/password', passwordStrength);
 app.use('/api/domain', domainToIp);
 
-app.use('/api/domain',domainToIp);
+app.use('/api/domain', domainToIp);
 
-app.use('/api/feedback',feedback);
+app.use('/api/feedback', feedback);
 
-app.use('/api/schedulemeeting',schedulemetting);
+app.use('/api/schedulemeeting', schedulemetting);
 
 app.get('/', (req, res) => {
   res.status(200).send("API is running...");

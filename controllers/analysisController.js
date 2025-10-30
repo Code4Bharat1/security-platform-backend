@@ -19,9 +19,9 @@ const FIX = {
 
 const scoreBand = (score) =>
   score >= 90 ? "Critical" :
-  score >= 70 ? "High" :
-  score >= 40 ? "Medium" :
-  score > 0  ? "Low" : "Safe";
+    score >= 70 ? "High" :
+      score >= 40 ? "Medium" :
+        score > 0 ? "Low" : "Safe";
 
 const sumToScore = (issues) =>
   Math.min(100, issues.reduce((acc, it) => acc + (severityWeights[it.severity] || 0), 0));
