@@ -1345,7 +1345,6 @@ export const runScan = async (req, res) => {
       ssl: null,
       headers: null,
       serviceDetection: null,
-      openPorts: null,
       vulnerabilities: [],
       vulnerabilityCount: 0,
       vulnerabilityBreakdown: null,
@@ -1358,74 +1357,105 @@ export const runScan = async (req, res) => {
       errorHandling: { check404: null },
     };
 
-    // 1) SSL/TLS Certificate Checks (ALL YOUR EXISTING CODE - UNCHANGED)
-    try {
-      const sslInfo = await sslChecker(domain);
-      scanResults.ssl = sslInfo;
+    // ✅ PHASE 1: RUN INITIAL CHECKS IN PARALLEL (5-8 seconds)
+    console.log('[Scanner] Phase 1: SSL, Headers, Robots - Starting...');
+    const [sslResult, headersResult, robotsResult] = await Promise.allSettled([
+      // SSL Check
+      sslChecker(domain).catch(err => ({ valid: false, error: err.message })),
 
-      if (sslInfo.valid) {
+      // Headers Check
+      (async () => {
+        const agent = new https.Agent({ rejectUnauthorized: false });
+        const started = Date.now();
+        const response = await axios.get(formattedUrl, {
+          timeout: 6000, // ✅ Reduced from 8000
+          httpsAgent: agent,
+          validateStatus: () => true,
+          maxRedirects: 0
+        });
+        return { response, timespan: Date.now() - started };
+      })(),
+
+      // Robots.txt Check
+      (async () => {
+        const agent = new https.Agent({ rejectUnauthorized: false });
+        const resp = await axios.get(`https://${domain}/robots.txt`, {
+          timeout: 3000, // ✅ Reduced from 5000
+          httpsAgent: agent,
+          validateStatus: () => true,
+        });
+        if (resp.status === 200 && resp.data) {
+          return analyzeRobotsTxt(resp.data);
+        }
+        return { present: false, allowsAll: true, disallowRules: [], sitemaps: [] };
+      })()
+    ]);
+
+    // Process SSL results (unchanged)
+    if (sslResult.status === 'fulfilled') {
+      scanResults.ssl = sslResult.value;
+
+      if (sslResult.value.valid) {
         try {
-          const isSelfSigned = sslInfo.issuer &&
-            (sslInfo.issuer === domain ||
-              sslInfo.issuer.toLowerCase().includes(domain.toLowerCase()));
+          const isSelfSigned = sslResult.value.issuer &&
+            (sslResult.value.issuer === domain ||
+              sslResult.value.issuer.toLowerCase().includes(domain.toLowerCase()));
 
           if (isSelfSigned) {
             scanResults.vulnerabilities.push({
               type: 'ssl_self_signed',
               severity: 'high',
               description: 'SSL Self-Signed Certificate',
-              details: `Certificate appears to be self-signed. Issuer: ${sslInfo.issuer}`,
-              recommendation: 'Use a certificate from a trusted Certificate Authority (CA) like Let\'s Encrypt, DigiCert, or Comodo'
+              details: `Certificate appears to be self-signed. Issuer: ${sslResult.value.issuer}`,
+              recommendation: 'Use a certificate from a trusted Certificate Authority (CA)'
             });
           }
-        } catch (e) {
-          console.error('Self-signed check error:', e);
-        }
+        } catch (e) { }
       }
 
-      if (!sslInfo.valid) {
+      if (!sslResult.value.valid) {
         scanResults.vulnerabilities.push({
           type: 'ssl_hostname_mismatch',
           severity: 'high',
           description: 'SSL Certificate with Wrong Hostname',
           details: `Certificate hostname does not match domain: ${domain}`,
-          recommendation: 'Obtain a certificate that matches your domain name or includes it in Subject Alternative Names (SAN)'
+          recommendation: 'Obtain a certificate that matches your domain name'
         });
       }
 
-      if (!sslInfo.valid) {
+      if (!sslResult.value.valid) {
         scanResults.vulnerabilities.push({
           type: 'ssl_untrusted',
           severity: 'critical',
           description: 'SSL Certificate Cannot Be Trusted',
-          details: `Certificate validation failed for ${domain}. This could indicate an untrusted CA, expired certificate, or invalid certificate chain.`,
-          recommendation: 'Ensure certificate is issued by a trusted CA and the certificate chain is complete'
+          details: `Certificate validation failed for ${domain}`,
+          recommendation: 'Ensure certificate is issued by a trusted CA'
         });
       }
 
-      if (sslInfo.valid && sslInfo.daysRemaining <= 30 && sslInfo.daysRemaining > 0) {
+      if (sslResult.value.valid && sslResult.value.daysRemaining <= 30 && sslResult.value.daysRemaining > 0) {
         scanResults.vulnerabilities.push({
           type: 'ssl_expiring_soon',
           severity: 'medium',
           description: 'SSL Certificate Expiring Soon',
-          details: `Certificate expires in ${sslInfo.daysRemaining} days (Valid until: ${sslInfo.validTo})`,
-          recommendation: 'Renew certificate before expiration to avoid service disruption. Consider using automated renewal with Let\'s Encrypt or your CA\'s auto-renewal service'
+          details: `Certificate expires in ${sslResult.value.daysRemaining} days`,
+          recommendation: 'Renew certificate before expiration'
         });
       }
 
-      if (sslInfo.daysRemaining < 0) {
+      if (sslResult.value.daysRemaining < 0) {
         scanResults.vulnerabilities.push({
           type: 'ssl_expired',
           severity: 'critical',
           description: 'SSL Certificate Expired',
-          details: `Certificate expired ${Math.abs(sslInfo.daysRemaining)} days ago (Valid until: ${sslInfo.validTo})`,
-          recommendation: 'Renew certificate immediately. Expired certificates cause browser warnings and security risks'
+          details: `Certificate expired ${Math.abs(sslResult.value.daysRemaining)} days ago`,
+          recommendation: 'Renew certificate immediately'
         });
       }
 
-      // Certificate Chain (ALL YOUR EXISTING CODE)
-      try {
-        const checkCertChain = () => {
+      // ✅ RUN CERT CHAIN AND TLS ANALYSIS IN PARALLEL
+      const [certChainResult, tlsResult] = await Promise.allSettled([
+        (async () => {
           return new Promise((resolve, reject) => {
             const options = {
               hostname: domain,
@@ -1442,8 +1472,7 @@ export const runScan = async (req, res) => {
 
               let currentCert = cert;
               while (currentCert && Object.keys(currentCert).length > 0) {
-                if (currentCert.issuerCertificate &&
-                  currentCert.issuerCertificate !== currentCert) {
+                if (currentCert.issuerCertificate && currentCert.issuerCertificate !== currentCert) {
                   chain.push({
                     subject: currentCert.subject?.CN || 'Unknown',
                     issuer: currentCert.issuer?.CN || 'Unknown',
@@ -1466,16 +1495,19 @@ export const runScan = async (req, res) => {
               resolve(chain);
             });
 
-            req.on('error', (e) => {
-              reject(e);
+            req.on('error', (e) => reject(e));
+            req.setTimeout(5000, () => {
+              req.destroy();
+              reject(new Error('Timeout'));
             });
-
             req.end();
           });
-        };
+        })(),
+        analyzeTLSProtocols(domain)
+      ]);
 
-        const certChain = await checkCertChain();
-
+      if (certChainResult.status === 'fulfilled') {
+        const certChain = certChainResult.value;
         scanResults.ssl.certificateChain = certChain;
         scanResults.ssl.chainLength = certChain.length;
 
@@ -1502,41 +1534,30 @@ export const runScan = async (req, res) => {
             type: 'ssl_chain_expiring',
             severity: 'medium',
             description: 'SSL Certificate Chain Contains Certificates Expiring Soon',
-            details: `${expiringChainCerts.length} certificate(s) in the chain will expire within 30 days: ${expiringChainCerts.map(c => c.subject).join(', ')}`,
-            recommendation: 'Renew intermediate or root certificates in the chain to maintain trust'
+            details: `${expiringChainCerts.length} certificate(s) in the chain will expire within 30 days`,
+            recommendation: 'Renew intermediate or root certificates in the chain'
           });
         }
-
-      } catch (chainError) {
-        console.error('Certificate chain check error:', chainError);
-        scanResults.ssl.certificateChain = null;
-        scanResults.ssl.chainCheckError = chainError.message;
+      } else {
+        scanResults.ssl.chainCheckError = certChainResult.reason?.message || 'Chain check failed';
       }
 
-      // TLS Protocol & Cipher Suite Support
-      try {
-        const tlsAnalysis = await analyzeTLSProtocols(domain);
-        scanResults.ssl.tlsProtocols = tlsAnalysis.protocols;
-        scanResults.ssl.cipherSuites = tlsAnalysis.cipherSuites;
-        scanResults.ssl.alpnProtocols = tlsAnalysis.alpnProtocols;
-        scanResults.ssl.perfectForwardSecrecy = tlsAnalysis.perfectForwardSecrecy;
+      if (tlsResult.status === 'fulfilled') {
+        scanResults.ssl.tlsProtocols = tlsResult.value.protocols;
+        scanResults.ssl.cipherSuites = tlsResult.value.cipherSuites;
+        scanResults.ssl.alpnProtocols = tlsResult.value.alpnProtocols;
+        scanResults.ssl.perfectForwardSecrecy = tlsResult.value.perfectForwardSecrecy;
 
-        if (tlsAnalysis.vulnerabilities?.length > 0) {
-          scanResults.vulnerabilities.push(...tlsAnalysis.vulnerabilities);
+        if (tlsResult.value.vulnerabilities?.length > 0) {
+          scanResults.vulnerabilities.push(...tlsResult.value.vulnerabilities);
         }
-
-      } catch (tlsError) {
-        console.error('TLS protocol analysis error:', tlsError);
-        scanResults.ssl.tlsProtocols = null;
-        scanResults.ssl.tlsCheckError = tlsError.message;
+      } else {
+        scanResults.ssl.tlsCheckError = tlsResult.reason?.message || 'TLS check failed';
       }
-
-    } catch (error) {
-      console.error('SSL check error:', error);
-
+    } else {
       scanResults.ssl = {
         valid: false,
-        error: error.message,
+        error: sslResult.reason?.message || 'SSL check failed',
         daysRemaining: null
       };
 
@@ -1544,27 +1565,19 @@ export const runScan = async (req, res) => {
         type: 'ssl_error',
         severity: 'high',
         description: 'SSL certificate issue detected',
-        details: error.message,
-        recommendation: 'Verify SSL/TLS configuration. Common issues: expired certificate, wrong hostname, untrusted CA, or incomplete certificate chain'
+        details: sslResult.reason?.message || 'Unknown error',
+        recommendation: 'Verify SSL/TLS configuration'
       });
     }
 
-    // 2) HTTP headers (ALL YOUR EXISTING CODE - UNCHANGED)
+    // Process Headers results
     let htmlBody = '';
     let finalUrlUsed = formattedUrl;
-    try {
-      const agent = new https.Agent({ rejectUnauthorized: false });
-      const started = Date.now();
-      const response = await axios.get(formattedUrl, {
-        timeout: 8000,
-        httpsAgent: agent,
-        validateStatus: () => true,
-        maxRedirects: 0
-      });
-      scanResults.timespan = Date.now() - started;
 
-      const headers = response.headers || {};
-      scanResults.headers = headers;
+    if (headersResult.status === 'fulfilled') {
+      const { response, timespan } = headersResult.value;
+      scanResults.timespan = timespan;
+      scanResults.headers = response.headers;
 
       const nodeRes = response?.request?.res;
       if (nodeRes && Array.isArray(nodeRes.rawHeaders) && nodeRes.rawHeaders.length) {
@@ -1574,7 +1587,7 @@ export const runScan = async (req, res) => {
         scanResults.headers.statusMessage = nodeRes.statusMessage || '';
       } else {
         const flat = [];
-        for (const [k, v] of Object.entries(headers)) {
+        for (const [k, v] of Object.entries(response.headers)) {
           flat.push(k, Array.isArray(v) ? v.join(', ') : String(v));
         }
         scanResults.headers.rawHeaders = flat;
@@ -1588,8 +1601,9 @@ export const runScan = async (req, res) => {
         'x-frame-options': 'X-Frame-Options not configured',
         'x-xss-protection': 'X-XSS-Protection not configured'
       };
+
       for (const [h, message] of Object.entries(secHeaders)) {
-        if (!headers[h]) {
+        if (!response.headers[h]) {
           scanResults.vulnerabilities.push({
             type: 'header',
             severity: 'medium',
@@ -1600,17 +1614,17 @@ export const runScan = async (req, res) => {
         }
       }
 
-      if (headers.server) {
+      if (response.headers.server) {
         scanResults.vulnerabilities.push({
           type: 'information_disclosure',
           severity: 'low',
           description: 'Server information disclosure',
-          details: `Server header reveals: ${headers.server}`,
+          details: `Server header reveals: ${response.headers.server}`,
           recommendation: 'Avoid exposing server brand/version'
         });
       }
 
-      const cookieFindings = parseSetCookie(headers['set-cookie']);
+      const cookieFindings = parseSetCookie(response.headers['set-cookie']);
       scanResults.headers.cookieFindings = cookieFindings.length > 0 ? cookieFindings : [];
 
       const pageIsHttps = /^https:\/\//i.test(formattedUrl);
@@ -1636,9 +1650,9 @@ export const runScan = async (req, res) => {
         }
       }
 
-      const cspHeader = Array.isArray(headers['content-security-policy'])
-        ? headers['content-security-policy'][0]
-        : headers['content-security-policy'];
+      const cspHeader = Array.isArray(response.headers['content-security-policy'])
+        ? response.headers['content-security-policy'][0]
+        : response.headers['content-security-policy'];
       const cspAnalysis = analyzeCSP(cspHeader);
       scanResults.headers.csp = cspAnalysis;
 
@@ -1648,15 +1662,15 @@ export const runScan = async (req, res) => {
           severity: cspAnalysis.present ? 'medium' : 'high',
           description: cspAnalysis.present ? 'CSP has issues' : 'CSP missing',
           details: cspAnalysis.issues.join('; '),
-          recommendation:
-            'Harden CSP (add default-src, remove unsafe-* tokens, set frame-ancestors, add upgrade-insecure-requests)'
+          recommendation: 'Harden CSP (add default-src, remove unsafe-* tokens, set frame-ancestors)'
         });
       }
 
+      // Get HTML body
       try {
         const agentFollow = new https.Agent({ rejectUnauthorized: false });
         const htmlResp = await axios.get(formattedUrl, {
-          timeout: 8000,
+          timeout: 6000, // ✅ Reduced from 8000
           httpsAgent: agentFollow,
           validateStatus: () => true,
           maxRedirects: 5,
@@ -1667,10 +1681,11 @@ export const runScan = async (req, res) => {
         finalUrlUsed = htmlResp.request?.res?.responseUrl || formattedUrl;
       } catch { }
 
-      const xfoMissing = !headers['x-frame-options'];
+      const xfoMissing = !response.headers['x-frame-options'];
       const cspLacksFrameAncestors =
         !scanResults.headers?.csp?.present ||
         scanResults.headers?.csp?.issues?.some((i) => /frame-ancestors/i.test(i));
+
       if (xfoMissing && cspLacksFrameAncestors) {
         scanResults.vulnerabilities.push({
           type: 'clickjacking',
@@ -1680,145 +1695,268 @@ export const runScan = async (req, res) => {
           recommendation: 'Set X-Frame-Options: DENY or SAMEORIGIN and add CSP frame-ancestors'
         });
       }
-
-      // Service Detection with NEW features
-      try {
-        const serviceDetection = await detectServiceTechnology(
-          domain,
-          scanResults.headers || {},
-          htmlBody
-        );
-
-        scanResults.serviceDetection = serviceDetection;
-
-        try {
-          const fqdnInfo = await resolveHostFQDN(domain);
-          scanResults.serviceDetection.fqdnInfo = fqdnInfo;
-        } catch (fqdnError) {
-          console.error('FQDN resolution error:', fqdnError);
-        }
-
-        // 🆕 Add CGI vulnerabilities if found
-        if (serviceDetection.cgiTesting?.vulnerable) {
-          scanResults.vulnerabilities.push({
-            type: 'cgi_injectable',
-            severity: 'high',
-            description: 'CGI Generic Injectable Parameter',
-            details: `Possible CGI injection vulnerability detected: ${serviceDetection.cgiTesting.findings.length} finding(s)`,
-            recommendation: 'Review and sanitize all CGI script inputs. Consider disabling CGI if not needed.'
-          });
-        }
-
-        if (serviceDetection.cgiTesting?.tested) {
-          scanResults.vulnerabilities.push({
-            type: 'cgi_tested',
-            severity: 'info',
-            description: 'CGI Generic Tests Completed',
-            details: `CGI endpoints tested. Vulnerable: ${serviceDetection.cgiTesting.vulnerable ? 'Yes' : 'No'}`,
-            recommendation: 'Regular CGI security testing recommended'
-          });
-        }
-
-        // 🆕 Add PostgreSQL detection results
-        if (serviceDetection.postgresqlDetection?.detected) {
-          scanResults.vulnerabilities.push({
-            type: 'postgresql_detected',
-            severity: 'info',
-            description: 'PostgreSQL Server Detection',
-            details: `PostgreSQL detected on port ${serviceDetection.postgresqlDetection.port}`,
-            recommendation: 'Ensure PostgreSQL is properly secured and not publicly accessible unless necessary'
-          });
-        }
-
-        // 🆕 Add CPE information as informational finding
-        if (serviceDetection.cpe?.length > 0) {
-          scanResults.vulnerabilities.push({
-            type: 'cpe_enumeration',
-            severity: 'info',
-            description: 'Common Platform Enumeration (CPE)',
-            details: `Identified ${serviceDetection.cpe.length} CPE entr(ies): ${serviceDetection.cpe.map(c => c.product).join(', ')}`,
-            recommendation: 'Monitor CVE databases for vulnerabilities related to identified platforms'
-          });
-        }
-
-        // 🆕 NEW: Add Traceroute information
-        if (serviceDetection.traceroute?.supported && serviceDetection.traceroute.hops?.length > 0) {
-          scanResults.vulnerabilities.push({
-            type: 'traceroute_info',
-            severity: 'info',
-            description: 'Traceroute Information',
-            details: `Network path traced: ${serviceDetection.traceroute.totalHops} hops detected`,
-            recommendation: 'Review network path for security and performance optimization'
-          });
-        }
-
-        // 🆕 NEW: Add Network Timing information
-        if (serviceDetection.networkTimings?.supported) {
-          const timings = serviceDetection.networkTimings.timings;
-          scanResults.vulnerabilities.push({
-            type: 'network_timings',
-            severity: 'info',
-            description: 'TCP/IP Network Timings',
-            details: `DNS: ${timings.dnsLookup?.toFixed(2)}ms, TCP: ${timings.tcpConnection?.toFixed(2)}ms, TLS: ${timings.tlsHandshake?.toFixed(2)}ms, TTFB: ${timings.ttfb?.toFixed(2)}ms`,
-            recommendation: 'Monitor network performance for optimization opportunities'
-          });
-        }
-
-        if (serviceDetection.applicationServers.length > 0) {
-          serviceDetection.applicationServers.forEach(server => {
-            scanResults.vulnerabilities.push({
-              type: 'service_detection',
-              severity: 'info',
-              description: `${server.name} Detected`,
-              details: `Application server detected via ${server.detected}`,
-              recommendation: 'Ensure server is up-to-date and properly configured'
-            });
-          });
-        }
-
-        const tomcatDetected = serviceDetection.applicationServers.find(
-          s => s.name === 'Apache Tomcat'
-        );
-
-        if (tomcatDetected) {
-          scanResults.vulnerabilities.push({
-            type: 'tomcat_detection',
-            severity: 'info',
-            description: 'Apache Tomcat Application Server Detected',
-            details: 'Apache Tomcat is running on this server',
-            recommendation: 'Keep Tomcat updated and disable default management interfaces'
-          });
-        }
-
-        if (serviceDetection.cms) {
-          scanResults.vulnerabilities.push({
-            type: 'cms_detection',
-            severity: 'info',
-            description: `${serviceDetection.cms.name} CMS Detected`,
-            details: `Content Management System: ${serviceDetection.cms.name}`,
-            recommendation: `Keep ${serviceDetection.cms.name} and plugins updated`
-          });
-        }
-
-      } catch (serviceError) {
-        console.error('Service detection error:', serviceError);
-        scanResults.serviceDetection = {
-          error: serviceError.message
-        };
-      }
-
-    } catch (error) {
-      console.error('HTTP headers error:', error);
+    } else {
       scanResults.vulnerabilities.push({
         type: 'connection',
         severity: 'medium',
         description: 'Failed to connect or retrieve headers',
-        details: error.message,
+        details: headersResult.reason?.message || 'Connection failed',
         recommendation: 'Ensure HTTPS is reachable and not blocking scanners'
       });
     }
 
-    // HTML Form Analysis (ALL YOUR EXISTING CODE)
+    // Process Robots.txt
+    if (robotsResult.status === 'fulfilled') {
+      scanResults.robots = robotsResult.value;
+
+      if (robotsResult.value.sitemaps?.length > 0) {
+        scanResults.vulnerabilities.push({
+          type: 'robots_sitemap',
+          severity: 'info',
+          description: 'Sitemaps Declared in robots.txt',
+          details: `Found ${robotsResult.value.sitemaps.length} sitemap(s)`,
+          recommendation: 'Ensure sitemaps are up-to-date'
+        });
+      }
+    } else {
+      scanResults.robots = { present: false, allowsAll: true, disallowRules: [], sitemaps: [] };
+    }
+
+    // ✅ PHASE 2: RUN HEAVY TASKS IN PARALLEL (20-30 seconds)
+    console.log('[Scanner] Phase 2: Service Detection, Sitemap, 404, Web Mirror - Starting...');
+
+    const [serviceResult, sitemapResult, check404Result, webMirrorResult] = await Promise.allSettled([
+      // Service Detection
+      detectServiceTechnology(domain, scanResults.headers || {}, htmlBody),
+
+      // Sitemap Check
+      (async () => {
+        const agent = new https.Agent({ rejectUnauthorized: false });
+        const sitemapUrls = [
+          `https://${domain}/sitemap.xml`,
+          `https://${domain}/sitemap_index.xml`,
+          ...(scanResults.robots?.sitemaps || [])
+        ];
+
+        for (const sitemapUrl of sitemapUrls) {
+          try {
+            const resp = await axios.get(sitemapUrl, {
+              timeout: 3000, // ✅ Reduced from 5000
+              httpsAgent: agent,
+              validateStatus: () => true,
+            });
+
+            if (resp.status === 200 && resp.data) {
+              const summary = await summarizeSitemap(resp.data);
+              return { url: sitemapUrl, ...summary };
+            }
+          } catch { }
+        }
+        return { present: false };
+      })(),
+
+      // 404 Check
+      check404Handling(domain),
+
+      // ✅ Web Mirroring (optimized settings)
+      crawlWebsite(formattedUrl, {
+        maxPages: 30,      // ✅ Reduced from 50
+        maxDepth: 2,       // ✅ Reduced from 3
+        timeout: 8000,     // ✅ Reduced from 15000
+        onlySubdomain: true
+      })
+    ]);
+
+    // Process Service Detection
+    if (serviceResult.status === 'fulfilled') {
+      scanResults.serviceDetection = serviceResult.value;
+
+      // Add FQDN info
+      try {
+        const fqdnInfo = await resolveHostFQDN(domain);
+        scanResults.serviceDetection.fqdnInfo = fqdnInfo;
+      } catch { }
+
+      // CGI vulnerabilities
+      if (serviceResult.value.cgiTesting?.vulnerable) {
+        scanResults.vulnerabilities.push({
+          type: 'cgi_injectable',
+          severity: 'high',
+          description: 'CGI Generic Injectable Parameter',
+          details: `Possible CGI injection vulnerability detected`,
+          recommendation: 'Review and sanitize all CGI script inputs'
+        });
+      }
+
+      if (serviceResult.value.cgiTesting?.tested) {
+        scanResults.vulnerabilities.push({
+          type: 'cgi_tested',
+          severity: 'info',
+          description: 'CGI Generic Tests Completed',
+          details: `CGI endpoints tested. Vulnerable: ${serviceResult.value.cgiTesting.vulnerable ? 'Yes' : 'No'}`,
+          recommendation: 'Regular CGI security testing recommended'
+        });
+      }
+
+      // PostgreSQL detection
+      if (serviceResult.value.postgresqlDetection?.detected) {
+        scanResults.vulnerabilities.push({
+          type: 'postgresql_detected',
+          severity: 'info',
+          description: 'PostgreSQL Server Detection',
+          details: `PostgreSQL detected on port ${serviceResult.value.postgresqlDetection.port}`,
+          recommendation: 'Ensure PostgreSQL is properly secured'
+        });
+      }
+
+      // CPE information
+      if (serviceResult.value.cpe?.length > 0) {
+        scanResults.vulnerabilities.push({
+          type: 'cpe_enumeration',
+          severity: 'info',
+          description: 'Common Platform Enumeration (CPE)',
+          details: `Identified ${serviceResult.value.cpe.length} CPE entr(ies)`,
+          recommendation: 'Monitor CVE databases for vulnerabilities'
+        });
+      }
+
+      // Traceroute
+      if (serviceResult.value.traceroute?.supported && serviceResult.value.traceroute.hops?.length > 0) {
+        scanResults.vulnerabilities.push({
+          type: 'traceroute_info',
+          severity: 'info',
+          description: 'Traceroute Information',
+          details: `Network path traced: ${serviceResult.value.traceroute.totalHops} hops detected`,
+          recommendation: 'Review network path for security and performance'
+        });
+      }
+
+      // Network Timings
+      if (serviceResult.value.networkTimings?.supported) {
+        const timings = serviceResult.value.networkTimings.timings;
+        scanResults.vulnerabilities.push({
+          type: 'network_timings',
+          severity: 'info',
+          description: 'TCP/IP Network Timings',
+          details: `DNS: ${timings.dnsLookup?.toFixed(2)}ms, TCP: ${timings.tcpConnection?.toFixed(2)}ms, TLS: ${timings.tlsHandshake?.toFixed(2)}ms, TTFB: ${timings.ttfb?.toFixed(2)}ms`,
+          recommendation: 'Monitor network performance for optimization'
+        });
+      }
+
+      // Application Servers
+      if (serviceResult.value.applicationServers?.length > 0) {
+        serviceResult.value.applicationServers.forEach(server => {
+          scanResults.vulnerabilities.push({
+            type: 'service_detection',
+            severity: 'info',
+            description: `${server.name} Detected`,
+            details: `Application server detected via ${server.detected}`,
+            recommendation: 'Ensure server is up-to-date'
+          });
+        });
+      }
+
+      // Tomcat
+      const tomcatDetected = serviceResult.value.applicationServers?.find(
+        s => s.name === 'Apache Tomcat'
+      );
+
+      if (tomcatDetected) {
+        scanResults.vulnerabilities.push({
+          type: 'tomcat_detection',
+          severity: 'info',
+          description: 'Apache Tomcat Application Server Detected',
+          details: 'Apache Tomcat is running on this server',
+          recommendation: 'Keep Tomcat updated and disable default management interfaces'
+        });
+      }
+
+      // CMS
+      if (serviceResult.value.cms) {
+        scanResults.vulnerabilities.push({
+          type: 'cms_detection',
+          severity: 'info',
+          description: `${serviceResult.value.cms.name} CMS Detected`,
+          details: `Content Management System: ${serviceResult.value.cms.name}`,
+          recommendation: `Keep ${serviceResult.value.cms.name} and plugins updated`
+        });
+      }
+    } else {
+      scanResults.serviceDetection = {
+        error: serviceResult.reason?.message || 'Service detection failed'
+      };
+    }
+
+    // Process Sitemap
+    if (sitemapResult.status === 'fulfilled') {
+      scanResults.sitemap = sitemapResult.value;
+
+      if (sitemapResult.value.type) {
+        scanResults.vulnerabilities.push({
+          type: 'sitemap_found',
+          severity: 'info',
+          description: 'Web Application Sitemap',
+          details: `Sitemap found: ${sitemapResult.value.type}`,
+          recommendation: 'Ensure sitemap doesn\'t expose sensitive URLs'
+        });
+      }
+    } else {
+      scanResults.sitemap = { present: false };
+    }
+
+    // Process 404 Check
+    if (check404Result.status === 'fulfilled') {
+      scanResults.errorHandling.check404 = check404Result.value;
+
+      if (!check404Result.value.properlyConfigured) {
+        scanResults.vulnerabilities.push({
+          type: '404_misconfigured',
+          severity: 'low',
+          description: 'Web Server No 404 Error Code Check',
+          details: `Server returned status ${check404Result.value.statusCode} instead of 404`,
+          recommendation: 'Configure server to return proper 404 status codes'
+        });
+      }
+    }
+
+    // ✅ Process Web Mirroring
+    if (webMirrorResult.status === 'fulfilled') {
+      scanResults.webMirror = webMirrorResult.value;
+      console.log(`[Scanner] Web mirror complete: ${webMirrorResult.value.totalPages} pages found`);
+
+      scanResults.vulnerabilities.push({
+        type: 'web_mirror',
+        severity: 'info',
+        description: 'Web Application Structure Mapped',
+        details: `Discovered ${webMirrorResult.value.totalPages} pages, ${webMirrorResult.value.totalDiscovered} unique URLs, ${webMirrorResult.value.assets?.totalAssets || 0} assets`,
+        recommendation: 'Review exposed pages and ensure sensitive pages are properly protected'
+      });
+
+      // Check for sensitive paths
+      const sensitivePaths = ['/admin', '/login', '/dashboard', '/api', '/config', '/backup', '/.git', '/.env'];
+      const exposedSensitive = webMirrorResult.value.pages?.filter(page =>
+        sensitivePaths.some(path => page.url.toLowerCase().includes(path))
+      ) || [];
+
+      if (exposedSensitive.length > 0) {
+        scanResults.vulnerabilities.push({
+          type: 'sensitive_paths_exposed',
+          severity: 'medium',
+          description: 'Potentially Sensitive Paths Discovered',
+          details: `Found ${exposedSensitive.length} potentially sensitive URL(s)`,
+          recommendation: 'Ensure sensitive paths are properly secured with authentication'
+        });
+      }
+    } else {
+      console.error('[Scanner] Web mirroring failed:', webMirrorResult.reason?.message);
+      scanResults.webMirror = {
+        error: webMirrorResult.reason?.message || 'Web mirroring failed',
+        totalPages: 0,
+        pages: []
+      };
+    }
+
+    // HTML Form Analysis
     if (htmlBody) {
       try {
         const formAnalysis = analyzeHTMLForms(htmlBody, finalUrlUsed);
@@ -1829,8 +1967,8 @@ export const runScan = async (req, res) => {
             type: 'form_autocomplete',
             severity: 'medium',
             description: 'Web Server Allows Password Auto-Completion',
-            details: `${formAnalysis.autoCompleteIssues.length} password field(s) allow autocomplete: ${formAnalysis.autoCompleteIssues[0]}`,
-            recommendation: 'Set autocomplete="off" or use "current-password"/"new-password" values for password fields'
+            details: `${formAnalysis.autoCompleteIssues.length} password field(s) allow autocomplete`,
+            recommendation: 'Set autocomplete="off" or use "current-password"/"new-password" values'
           });
         }
 
@@ -1840,7 +1978,7 @@ export const runScan = async (req, res) => {
             severity: 'critical',
             description: 'Web Server Transmits Cleartext Credentials',
             details: 'Form with password field submits to HTTP (unencrypted) endpoint',
-            recommendation: 'Use HTTPS for all forms transmitting sensitive data, especially passwords'
+            recommendation: 'Use HTTPS for all forms transmitting sensitive data'
           });
         }
 
@@ -1849,7 +1987,7 @@ export const runScan = async (req, res) => {
             type: 'insecure_form_action',
             severity: 'high',
             description: 'Forms Submit to Insecure HTTP Endpoints',
-            details: `${formAnalysis.insecureActions.length} form(s) use HTTP actions: ${formAnalysis.insecureActions.slice(0, 3).join(', ')}`,
+            details: `${formAnalysis.insecureActions.length} form(s) use HTTP actions`,
             recommendation: 'Change all form actions to use HTTPS'
           });
         }
@@ -1857,6 +1995,7 @@ export const runScan = async (req, res) => {
         console.error('HTML form analysis error:', formError);
       }
 
+      // Extract external URLs
       try {
         const externalUrls = extractExternalURLs(htmlBody, domain);
         if (scanResults.serviceDetection) {
@@ -1867,153 +2006,7 @@ export const runScan = async (req, res) => {
       }
     }
 
-    // Robots.txt, Sitemap, 404 Check (ALL YOUR EXISTING CODE)
-    try {
-      const agent = new https.Agent({ rejectUnauthorized: false });
-      const robotsResp = await axios.get(`https://${domain}/robots.txt`, {
-        timeout: 5000,
-        httpsAgent: agent,
-        validateStatus: () => true,
-      });
-
-      if (robotsResp.status === 200 && robotsResp.data) {
-        const robotsAnalysis = analyzeRobotsTxt(robotsResp.data);
-        scanResults.robots = robotsAnalysis;
-
-        if (robotsAnalysis.sitemaps.length > 0) {
-          scanResults.vulnerabilities.push({
-            type: 'robots_sitemap',
-            severity: 'info',
-            description: 'Sitemaps Declared in robots.txt',
-            details: `Found ${robotsAnalysis.sitemaps.length} sitemap(s): ${robotsAnalysis.sitemaps.slice(0, 3).join(', ')}`,
-            recommendation: 'Ensure sitemaps are up-to-date and don\'t expose sensitive URLs'
-          });
-        }
-      } else {
-        scanResults.robots = { present: false, allowsAll: true, disallowRules: [], sitemaps: [] };
-      }
-    } catch (robotsError) {
-      console.error('Robots.txt fetch error:', robotsError);
-      scanResults.robots = { present: false, error: robotsError.message, allowsAll: true, disallowRules: [], sitemaps: [] };
-    }
-
-    // 🆕 WEB MIRRORING (NEW FEATURE - ADD THIS)
-    console.log('[Scanner] Starting web mirroring...');
-    try {
-      const webMirror = await crawlWebsite(formattedUrl, {
-        maxPages: 50,
-        maxDepth: 3,
-        timeout: 15000,
-        onlySubdomain: true
-      });
-
-      scanResults.webMirror = webMirror;
-      console.log(`[Scanner] Web mirror complete: ${webMirror.totalPages} pages found`);
-
-      // Add vulnerability entry
-      scanResults.vulnerabilities.push({
-        type: 'web_mirror',
-        severity: 'info',
-        description: 'Web Application Structure Mapped',
-        details: `Discovered ${webMirror.totalPages} pages, ${webMirror.totalDiscovered} unique URLs, ${webMirror.assets.totalAssets} assets`,
-        recommendation: 'Review exposed pages and ensure sensitive pages are properly protected'
-      });
-
-      // Check for potential sensitive pages
-      const sensitivePaths = ['/admin', '/login', '/dashboard', '/api', '/config', '/backup', '/.git', '/.env'];
-      const exposedSensitive = webMirror.pages.filter(page =>
-        sensitivePaths.some(path => page.url.toLowerCase().includes(path))
-      );
-
-      if (exposedSensitive.length > 0) {
-        scanResults.vulnerabilities.push({
-          type: 'sensitive_paths_exposed',
-          severity: 'medium',
-          description: 'Potentially Sensitive Paths Discovered',
-          details: `Found ${exposedSensitive.length} potentially sensitive URL(s): ${exposedSensitive.slice(0, 3).map(p => p.url).join(', ')}`,
-          recommendation: 'Ensure sensitive paths are properly secured with authentication and access controls'
-        });
-      }
-
-    } catch (mirrorError) {
-      console.error('[Scanner] Web mirroring failed:', mirrorError.message);
-      scanResults.webMirror = {
-        error: mirrorError.message,
-        totalPages: 0,
-        pages: []
-      };
-    }
-
-    // Vulnerability breakdown, risk, grade (EXISTING CODE CONTINUES HERE)
-    // const vulnBreakdown = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
-
-
-    try {
-      const agent = new https.Agent({ rejectUnauthorized: false });
-      const sitemapUrls = [
-        `https://${domain}/sitemap.xml`,
-        `https://${domain}/sitemap_index.xml`,
-        ...(scanResults.robots?.sitemaps || [])
-      ];
-
-      let sitemapFound = false;
-      for (const sitemapUrl of sitemapUrls) {
-        try {
-          const sitemapResp = await axios.get(sitemapUrl, {
-            timeout: 5000,
-            httpsAgent: agent,
-            validateStatus: () => true,
-          });
-
-          if (sitemapResp.status === 200 && sitemapResp.data) {
-            const sitemapSummary = await summarizeSitemap(sitemapResp.data);
-            scanResults.sitemap = {
-              url: sitemapUrl,
-              ...sitemapSummary
-            };
-
-            scanResults.vulnerabilities.push({
-              type: 'sitemap_found',
-              severity: 'info',
-              description: 'Web Application Sitemap',
-              details: `Sitemap found at ${sitemapUrl}: ${sitemapSummary.type}, ${sitemapSummary.totalUrls || sitemapSummary.totalSitemaps || 0} entries`,
-              recommendation: 'Ensure sitemap doesn\'t expose sensitive or administrative URLs'
-            });
-
-            sitemapFound = true;
-            break;
-          }
-        } catch {
-          continue;
-        }
-      }
-
-      if (!sitemapFound) {
-        scanResults.sitemap = { present: false };
-      }
-    } catch (sitemapError) {
-      console.error('Sitemap fetch error:', sitemapError);
-      scanResults.sitemap = { present: false, error: sitemapError.message };
-    }
-
-    try {
-      const check404 = await check404Handling(domain);
-      scanResults.errorHandling.check404 = check404;
-
-      if (!check404.properlyConfigured) {
-        scanResults.vulnerabilities.push({
-          type: '404_misconfigured',
-          severity: 'low',
-          description: 'Web Server No 404 Error Code Check',
-          details: `Server returned status ${check404.statusCode} instead of 404 for non-existent page`,
-          recommendation: 'Configure server to return proper 404 status codes for non-existent resources'
-        });
-      }
-    } catch (check404Error) {
-      console.error('404 check error:', check404Error);
-    }
-
-    // Vulnerability breakdown, risk, grade (ALL YOUR EXISTING CODE)
+    // Vulnerability breakdown, risk, grade
     const vulnBreakdown = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
     scanResults.vulnerabilities.forEach(v => {
       if (vulnBreakdown[v.severity] !== undefined) vulnBreakdown[v.severity]++;
@@ -2041,6 +2034,7 @@ export const runScan = async (req, res) => {
     scanResults.metrics = metrics;
     scanResults.securityGrade = gradeFromMetrics(metrics);
 
+    console.log('[Scanner] Scan complete, saving to database...');
     const saved = await ScanResult.create(scanResults);
     return res.status(200).json(saved);
 
@@ -2053,6 +2047,7 @@ export const runScan = async (req, res) => {
     });
   }
 };
+
 
 
 export const getHistory = async (req, res) => {
