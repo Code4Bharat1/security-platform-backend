@@ -90,6 +90,24 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cookieParser());
+
+// CSP Middleware
+app.use((req, res, next) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://unpkg.com; " +
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; " +
+    "font-src 'self' https://fonts.gstatic.com; " +
+    "img-src 'self' data: https:; " +
+    "connect-src 'self' http://localhost:* http://127.0.0.1:* https://security-platform-api.code4bharat.com wss://security-platform-api.code4bharat.com; " +
+    "frame-ancestors 'none'; " +
+    "base-uri 'self'; " +
+    "form-action 'self';"
+  );
+  next();
+});
+
 app.use(cors({
   origin: ['http://localhost:3000', 'https://security-platform.code4bharat.com'],
   credentials: true
