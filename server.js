@@ -84,7 +84,11 @@ const PORT = process.env.PORT || 5000;
 // 1. Cookie Parser (FIRST)
 app.use(cookieParser());
 
-// 2. CORS Configuration (BEFORE Helmet and Body Parsers)
+// 2. Body Parsers (MOVED BEFORE CORS)
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// 3. CORS Configuration
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
@@ -120,24 +124,27 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// Handle preflight requests explicitly
-// ✅ Use this instead
+// ✅ SINGLE UNIFIED CORS + OPTIONS HANDLER
 app.use((req, res, next) => {
-  if (req.method === 'OPTIONS') {
-    res.header('Access-Control-Allow-Origin', req.headers.origin);
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cookie');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Max-Age', '86400');
-    return res.sendStatus(200);
+  const origin = req.headers.origin;
+
+  // Set CORS headers for all requests
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cookie');
+    res.setHeader('Access-Control-Expose-Headers', 'Set-Cookie');
   }
+
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Max-Age', '86400');
+    return res.status(200).end();
+  }
+
   next();
 });
-
-
-// 3. Body Parsers
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // 4. Request Logger
 app.use((req, res, next) => {
@@ -188,28 +195,7 @@ app.use(
   })
 );
 
-// 6. Additional CORS Headers (for maximum compatibility)
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-
-  if (origin && allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cookie');
-    res.setHeader('Access-Control-Expose-Headers', 'Set-Cookie');
-  }
-
-  // Handle preflight
-  if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Max-Age', '86400');
-    return res.status(200).end();
-  }
-
-  next();
-});
-
-// 7. Static file serving
+// 6. Static file serving
 app.use('/uploads', express.static('uploads'));
 
 // ==================== DATABASE CONNECTION ====================
@@ -268,7 +254,8 @@ const toolRoutes = [
   '/api/dbscan',
   '/api/keywords',
   '/api/bruteForce',
-  '/api/domain'
+  '/api/domain',
+  '/api/scan/run-scan'
 ];
 
 // Apply authentication & credits check to protected routes

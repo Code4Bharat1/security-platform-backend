@@ -98,9 +98,9 @@ function countMissingSecurityHeaders(headers) {
 
 function gradeFromMetrics({ vulnCount, missingSecHeaders, weakCookies, cspIssues }) {
   let score = 100
-    - vulnCount * 10
-    - missingSecHeaders * 8
-    - weakCookies * 6
+    - vulnCount * 5
+    - missingSecHeaders * 3
+    - weakCookies * 4
     - cspIssues * 2;
 
   if (score < 0) score = 0;

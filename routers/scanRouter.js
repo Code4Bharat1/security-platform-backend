@@ -1,5 +1,7 @@
 import express from 'express';
 import { runScan, getHistory } from '../controllers/scanController.js';
+import { authMiddleware } from '../middleware/authMiddleware.js';
+import { checkCredits } from '../middleware/checkCredits.js';
 
 const router = express.Router();
 
@@ -7,7 +9,7 @@ const router = express.Router();
 router.post('/run-scan', runScan);
 
 // GET /api/scan/history
-router.get('/history', getHistory);
+router.get('/history', authMiddleware, getHistory);
 
 
 export default router;
