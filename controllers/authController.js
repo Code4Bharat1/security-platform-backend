@@ -6,8 +6,8 @@ import { Otp } from '../models/otp.js';
 
 // Nodemailer transporter
 const transporter = nodemailer.createTransport({
-  host: process.env.MAIL_HOST, // e.g., smtp.gmail.com
-  port: +process.env.MAIL_PORT, // e.g., 587
+  host: process.env.MAIL_HOST,
+  port: +process.env.MAIL_PORT,
   secure: process.env.MAIL_SECURE === 'true',
   auth: {
     user: process.env.MAIL_USER,
@@ -36,10 +36,9 @@ const generateRefreshToken = async (user) => {
   return refreshToken;
 };
 
-// Create audit log (mock implementation, adjust as needed)
+// Create audit log
 const createAuditLog = async ({ adminId, adminName, actionType, description, targetType }) => {
   console.log(`Audit Log: ${adminName} (${adminId}) - ${actionType} - ${description} - ${targetType}`);
-  // Implement actual audit logging if needed (e.g., save to a MongoDB collection)
 };
 
 // Signup controller
@@ -54,14 +53,17 @@ export const signup = async (req, res) => {
 
     const newUser = await User.create({ email, password: hashedPassword, credits: 30 });
 
-    res.status(201).json({ message: "User created", user: { id: newUser._id, email: newUser.email, credits: newUser.credits } });
+    res.status(201).json({
+      message: "User created",
+      user: { id: newUser._id, email: newUser.email, credits: newUser.credits }
+    });
   } catch (error) {
     console.error("Signup error:", error);
     res.status(500).json({ message: "Signup failed" });
   }
 };
 
-// Login controller
+// ✅ UPDATED: Login controller (removed cookie)
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -83,13 +85,10 @@ export const login = async (req, res) => {
       targetType: 'System',
     });
 
-    res.cookie('access_token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 60 * 60 * 1000, // 1 hour
-    });
+    // ❌ REMOVED: Cookie-based auth (causing production issues)
+    // res.cookie('access_token', token, { ... });
 
+    // ✅ Send token in response body only
     res.status(200).json({
       message: "Login successful",
       token,
@@ -111,6 +110,7 @@ export const logout = async (req, res) => {
       await user.save();
     }
 
+    // Clear cookie if it exists (for backward compatibility)
     res.clearCookie('access_token', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -163,7 +163,7 @@ export const forgotPassword = async (req, res) => {
     }
 
     const otp = String(Math.floor(100000 + Math.random() * 900000));
-    const expires = Date.now() + 10 * 60 * 1000; // 10 minutes
+    const expires = Date.now() + 10 * 60 * 1000;
 
     await Otp.findOneAndUpdate(
       { email },
@@ -232,7 +232,7 @@ export const resetPassword = async (req, res) => {
   }
 };
 
-// Inspect token controller
+// ✅ UPDATED: Simplified inspect token controller
 export const inspectToken = async (req, res) => {
   try {
     const { token, secret } = req.body;
@@ -343,6 +343,25 @@ export const inspectToken = async (req, res) => {
   } catch (error) {
     console.error("Token inspect error:", error);
     res.status(500).json({ error: "Failed to analyze token" });
+  }
+};
+
+// ✅ NEW: Verify token endpoint (for frontend token validation)
+export const verifyToken = async (req, res) => {
+  try {
+    // If authMiddleware passed, token is valid
+    res.status(200).json({
+      valid: true,
+      user: {
+        id: req.user._id,
+        name: req.user.name,
+        email: req.user.email,
+        credits: req.user.credits
+      }
+    });
+  } catch (error) {
+    console.error("Verify token error:", error);
+    res.status(500).json({ error: "Failed to verify token" });
   }
 };
 

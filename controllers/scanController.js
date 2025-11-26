@@ -965,6 +965,575 @@ async function measureNetworkTimings(domain) {
   });
 }
 
+// ==================== FEATURE 1: FIREWALL/WAF DETECTION (UPDATED) ====================
+async function detectFirewall(domain) {
+  const results = {
+    detected: false,
+    wafType: null,
+    confidence: 'low',
+    details: [],
+    fingerprints: [],
+    testResults: [],
+    error: null, // <-- added
+  };
+
+  const agent = new https.Agent({ rejectUnauthorized: false });
+
+  try {
+    // Test 1: Response header analysis
+    const response = await axios.get(`https://${domain}`, {
+      timeout: 5000,
+      httpsAgent: agent,
+      validateStatus: () => true,
+    });
+
+    const headers = response.headers || {};
+
+    // Check for common WAF signatures
+    const wafSignatures = [
+      { header: 'server', pattern: /cloudflare/i, name: 'Cloudflare', confidence: 'high' },
+      { header: 'cf-ray', pattern: /./, name: 'Cloudflare', confidence: 'high' },
+      { header: 'x-sucuri-id', pattern: /./, name: 'Sucuri', confidence: 'high' },
+      { header: 'x-protected-by', pattern: /incapsula|imperva/i, name: 'Imperva Incapsula', confidence: 'high' },
+      { header: 'x-cdn', pattern: /incapsula/i, name: 'Imperva Incapsula', confidence: 'high' },
+      { header: 'x-fw-hash', pattern: /./, name: 'F5 BIG-IP', confidence: 'high' },
+      { header: 'x-akamai', pattern: /./, name: 'Akamai', confidence: 'high' },
+      { header: 'x-amz-cf-id', pattern: /./, name: 'AWS CloudFront', confidence: 'high' },
+      { header: 'server', pattern: /aws/i, name: 'AWS WAF', confidence: 'medium' },
+      { header: 'x-azure-ref', pattern: /./, name: 'Azure WAF', confidence: 'high' },
+      { header: 'server', pattern: /mod_security|modsec/i, name: 'ModSecurity', confidence: 'high' },
+      { header: 'server', pattern: /barracuda/i, name: 'Barracuda WAF', confidence: 'high' },
+      { header: 'x-sucuri-cache', pattern: /./, name: 'Sucuri', confidence: 'high' },
+    ];
+
+    for (const sig of wafSignatures) {
+      const headerValue = headers[sig.header];
+      if (headerValue && sig.pattern.test(String(headerValue))) {
+        results.detected = true;
+        results.wafType = sig.name;
+        results.confidence = sig.confidence;
+        results.fingerprints.push({
+          header: sig.header,
+          value: headerValue,
+          waf: sig.name,
+        });
+      }
+    }
+
+    // Test 2: XSS/SQLi payload test
+    const maliciousPayloads = [
+      { payload: "?id=1'OR'1'='1", type: 'SQL Injection' },
+      { payload: '?q=<script>alert(1)</script>', type: 'XSS' },
+    ];
+
+    for (const test of maliciousPayloads) {
+      try {
+        const testResponse = await axios.get(`https://${domain}${test.payload}`, {
+          timeout: 3000,
+          httpsAgent: agent,
+          validateStatus: () => true,
+        });
+
+        results.testResults.push({
+          payload: test.payload,
+          type: test.type,
+          statusCode: testResponse.status,
+          blocked: testResponse.status === 403 || testResponse.status === 406,
+        });
+
+        if (testResponse.status === 403 || testResponse.status === 406) {
+          results.detected = true;
+          results.details.push(`${test.type} payload blocked with HTTP ${testResponse.status}`);
+
+          const blockPage = String(testResponse.data || '').toLowerCase();
+          if (blockPage.includes('cloudflare')) {
+            results.wafType = 'Cloudflare';
+            results.confidence = 'high';
+          } else if (!results.wafType) {
+            results.wafType = 'Unknown WAF';
+            results.confidence = 'medium';
+          }
+        }
+      } catch (err) {
+        // Ignore individual payload test errors, but log for debugging
+        console.log('Firewall payload test error:', err.message);
+      }
+    }
+  } catch (error) {
+    console.error('Firewall detection error:', error.message);
+    // IMPORTANT: set error but still return a valid object
+    results.error = error.message || 'Firewall detection failed';
+  }
+
+  return results;
+}
+
+// ==================== FEATURE 2: SESSION MANAGEMENT TESTING (UPDATED) ====================
+async function testSessionManagement(domain) {
+  const results = {
+    sessionCreated: false,
+    sessionCookies: [],
+    securityIssues: [],
+    sessionDetails: {},
+    error: null, // <-- added
+  };
+
+  const agent = new https.Agent({ rejectUnauthorized: false });
+
+  try {
+    const response = await axios.get(`https://${domain}`, {
+      timeout: 5000,
+      httpsAgent: agent,
+      validateStatus: () => true,
+    });
+
+    const setCookies = response.headers?.['set-cookie'] || [];
+
+    // Identify session cookies
+    const sessionPatterns = [
+      /session/i,
+      /sess/i,
+      /jsessionid/i,
+      /phpsessid/i,
+      /asp\.net_sessionid/i,
+      /connect\.sid/i,
+      /laravel_session/i,
+      /XSRF-TOKEN/i,
+    ];
+
+    setCookies.forEach((cookieStr) => {
+      const cookieName = cookieStr.split('=')[0].trim();
+      const isSessionCookie = sessionPatterns.some((pattern) => pattern.test(cookieName));
+
+      if (isSessionCookie) {
+        results.sessionCreated = true;
+
+        const cookieDetails = {
+          name: cookieName,
+          value: cookieStr.split(';')[0].split('=')[1] || '',
+          attributes: {},
+        };
+
+        // Parse cookie attributes
+        const parts = cookieStr.split(';').map((p) => p.trim());
+        parts.forEach((part, idx) => {
+          if (idx === 0) return;
+
+          const [key, value] = part.split('=');
+          if (key) {
+            cookieDetails.attributes[key.toLowerCase()] = value || true;
+          }
+        });
+
+        results.sessionCookies.push(cookieDetails);
+
+        // Check for security issues
+        if (!cookieDetails.attributes.secure) {
+          results.securityIssues.push({
+            cookie: cookieName,
+            issue: 'Missing Secure flag',
+            severity: 'high',
+            description: 'Session cookie transmitted without Secure flag',
+            recommendation: 'Set Secure flag on all session cookies',
+          });
+        }
+
+        if (!cookieDetails.attributes.httponly) {
+          results.securityIssues.push({
+            cookie: cookieName,
+            issue: 'Missing HttpOnly flag',
+            severity: 'high',
+            description: 'Session cookie accessible via JavaScript (XSS risk)',
+            recommendation: 'Set HttpOnly flag on all session cookies',
+          });
+        }
+
+        if (!cookieDetails.attributes.samesite) {
+          results.securityIssues.push({
+            cookie: cookieName,
+            issue: 'Missing SameSite attribute',
+            severity: 'medium',
+            description: 'Session cookie vulnerable to CSRF attacks',
+            recommendation: 'Set SameSite=Strict or SameSite=Lax',
+          });
+        }
+
+        // Check session token strength
+        const tokenValue = cookieDetails.value || '';
+        if (tokenValue.length < 16) {
+          results.securityIssues.push({
+            cookie: cookieName,
+            issue: 'Weak session token',
+            severity: 'high',
+            description: `Session token too short (${tokenValue.length} chars)`,
+            recommendation: 'Use at least 128-bit (16+ character) random session tokens',
+          });
+        }
+      }
+    });
+
+    // Session details
+    if (results.sessionCreated) {
+      results.sessionDetails = {
+        totalSessionCookies: results.sessionCookies.length,
+        secureCount: results.sessionCookies.filter((c) => c.attributes.secure).length,
+        httpOnlyCount: results.sessionCookies.filter((c) => c.attributes.httponly).length,
+        sameSiteCount: results.sessionCookies.filter((c) => c.attributes.samesite).length,
+      };
+    }
+  } catch (error) {
+    console.error('Session management test error:', error.message);
+    // IMPORTANT: set error but still return a valid object
+    results.error = error.message || 'Session management test failed';
+  }
+
+  return results;
+}
+
+
+// ==================== 🆕 FEATURE 3: PORT SCANNER WITH IMPACT ====================
+
+
+async function scanPortsWithImpact(domain) {
+  const results = {
+    scanned: false,
+    scanType: 'TCP Connect Scan',
+    hostStatus: 'unknown',
+    openPorts: [],
+    closedPorts: [],
+    filteredPorts: [],
+    totalScanned: 0,
+    scanDuration: 0,
+    securityImpact: []
+  };
+
+  const portsToScan = [
+    { port: 21, name: 'FTP', risk: 'high', impact: 'Unencrypted file transfer', protocol: 'tcp' },
+    { port: 22, name: 'SSH', risk: 'medium', impact: 'Secure shell access', protocol: 'tcp' },
+    { port: 23, name: 'Telnet', risk: 'critical', impact: 'Unencrypted remote access', protocol: 'tcp' },
+    { port: 25, name: 'SMTP', risk: 'medium', impact: 'Mail transfer agent', protocol: 'tcp' },
+    { port: 53, name: 'DNS', risk: 'medium', impact: 'Domain name system', protocol: 'tcp/udp' },
+    { port: 80, name: 'HTTP', risk: 'low', impact: 'Web server (unencrypted)', protocol: 'tcp' },
+    { port: 110, name: 'POP3', risk: 'medium', impact: 'Post Office Protocol', protocol: 'tcp' },
+    { port: 143, name: 'IMAP', risk: 'medium', impact: 'Internet Message Access', protocol: 'tcp' },
+    { port: 443, name: 'HTTPS', risk: 'low', impact: 'Secure web server', protocol: 'tcp' },
+    { port: 445, name: 'SMB', risk: 'critical', impact: 'Windows file sharing', protocol: 'tcp' },
+    { port: 465, name: 'SMTPS', risk: 'low', impact: 'Secure SMTP', protocol: 'tcp' },
+    { port: 587, name: 'Submission', risk: 'low', impact: 'Email submission', protocol: 'tcp' },
+    { port: 993, name: 'IMAPS', risk: 'low', impact: 'Secure IMAP', protocol: 'tcp' },
+    { port: 995, name: 'POP3S', risk: 'low', impact: 'Secure POP3', protocol: 'tcp' },
+    { port: 1433, name: 'MS-SQL', risk: 'high', impact: 'Microsoft SQL Server', protocol: 'tcp' },
+    { port: 3306, name: 'MySQL', risk: 'high', impact: 'MySQL database', protocol: 'tcp' },
+    { port: 3389, name: 'RDP', risk: 'critical', impact: 'Remote Desktop Protocol', protocol: 'tcp' },
+    { port: 5432, name: 'PostgreSQL', risk: 'high', impact: 'PostgreSQL database', protocol: 'tcp' },
+    { port: 5900, name: 'VNC', risk: 'high', impact: 'Virtual Network Computing', protocol: 'tcp' },
+    { port: 6379, name: 'Redis', risk: 'critical', impact: 'Redis database', protocol: 'tcp' },
+    { port: 8080, name: 'HTTP-Alt', risk: 'medium', impact: 'Alternative HTTP', protocol: 'tcp' },
+    { port: 8443, name: 'HTTPS-Alt', risk: 'medium', impact: 'Alternative HTTPS', protocol: 'tcp' },
+    { port: 27017, name: 'MongoDB', risk: 'critical', impact: 'MongoDB database', protocol: 'tcp' }
+  ];
+
+  results.totalScanned = portsToScan.length;
+  const startTime = Date.now();
+
+  const scanPromises = portsToScan.map(portInfo =>
+    checkPortDetailed(domain, portInfo)
+  );
+
+  try {
+    const scanResults = await Promise.all(scanPromises);
+    results.scanned = true;
+    results.scanDuration = Date.now() - startTime;
+
+    let openCount = 0;
+    scanResults.forEach(result => {
+      if (result.state === 'open') {
+        openCount++;
+        results.openPorts.push({
+          port: result.port,
+          service: result.service,
+          state: result.state,
+          protocol: result.protocol,
+          version: result.version || 'unknown',
+          banner: result.banner || null,
+          responseTime: result.responseTime,
+          risk: result.risk,
+          impact: result.impact,
+          details: result.details
+        });
+
+        results.securityImpact.push({
+          port: result.port,
+          service: result.service,
+          severity: result.risk,
+          finding: `${result.port}/${result.protocol} open ${result.service}`,
+          state: result.state,
+          version: result.version,
+          impact: result.impact,
+          recommendation: getPortRecommendation(result.port, result.service, result.risk)
+        });
+      } else if (result.state === 'closed') {
+        results.closedPorts.push({
+          port: result.port,
+          service: result.service,
+          state: result.state
+        });
+      } else if (result.state === 'filtered') {
+        results.filteredPorts.push({
+          port: result.port,
+          service: result.service,
+          state: result.state
+        });
+      }
+    });
+
+    results.hostStatus = openCount > 0 ? 'up' : 'down';
+
+  } catch (error) {
+    console.error('Port scanning error:', error.message);
+  }
+
+  return results;
+}
+
+/* ========== Enhanced Port Checker with Banner Grabbing ========== */
+
+async function checkPortDetailed(domain, portInfo) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    const timeout = 3000;
+    const startTime = Date.now();
+    let banner = null;
+    let version = null;
+
+    socket.setTimeout(timeout);
+
+    socket.on('connect', () => {
+      const responseTime = Date.now() - startTime;
+
+      // Banner grabbing for specific services
+      if (portInfo.port === 22) {
+        // SSH banner
+        socket.once('data', (data) => {
+          banner = data.toString().trim();
+          version = extractSSHVersion(banner);
+          socket.destroy();
+          resolve({
+            ...portInfo,
+            state: 'open',
+            responseTime: `${responseTime}ms`,
+            banner,
+            version,
+            details: `SSH service detected: ${version || 'unknown version'}`
+          });
+        });
+        setTimeout(() => {
+          socket.destroy();
+          resolve({
+            ...portInfo,
+            state: 'open',
+            responseTime: `${responseTime}ms`,
+            details: 'Service detected but banner not readable'
+          });
+        }, 1000);
+      } else if (portInfo.port === 21) {
+        // FTP banner
+        socket.once('data', (data) => {
+          banner = data.toString().trim();
+          version = extractFTPVersion(banner);
+          socket.destroy();
+          resolve({
+            ...portInfo,
+            state: 'open',
+            responseTime: `${responseTime}ms`,
+            banner,
+            version,
+            details: `FTP service: ${version || 'unknown'}`
+          });
+        });
+        setTimeout(() => {
+          socket.destroy();
+          resolve({
+            ...portInfo,
+            state: 'open',
+            responseTime: `${responseTime}ms`,
+            details: 'FTP service detected'
+          });
+        }, 1000);
+      } else if (portInfo.port === 25 || portInfo.port === 587) {
+        // SMTP banner
+        socket.once('data', (data) => {
+          banner = data.toString().trim();
+          version = extractSMTPVersion(banner);
+          socket.destroy();
+          resolve({
+            ...portInfo,
+            state: 'open',
+            responseTime: `${responseTime}ms`,
+            banner,
+            version,
+            details: `SMTP service: ${version || 'ready'}`
+          });
+        });
+        setTimeout(() => {
+          socket.destroy();
+          resolve({
+            ...portInfo,
+            state: 'open',
+            responseTime: `${responseTime}ms`,
+            details: 'SMTP service detected'
+          });
+        }, 1000);
+      } else if (portInfo.port === 80 || portInfo.port === 8080) {
+        // HTTP - send simple request
+        socket.write('HEAD / HTTP/1.0\r\n\r\n');
+        socket.once('data', (data) => {
+          banner = data.toString().trim();
+          version = extractHTTPVersion(banner);
+          socket.destroy();
+          resolve({
+            ...portInfo,
+            state: 'open',
+            responseTime: `${responseTime}ms`,
+            banner: banner.split('\r\n')[0],
+            version,
+            details: `HTTP service: ${version || 'detected'}`
+          });
+        });
+        setTimeout(() => {
+          socket.destroy();
+          resolve({
+            ...portInfo,
+            state: 'open',
+            responseTime: `${responseTime}ms`,
+            details: 'HTTP service detected'
+          });
+        }, 1000);
+      } else if (portInfo.port === 3306) {
+        // MySQL banner
+        socket.once('data', (data) => {
+          banner = data.toString('hex').substring(0, 100);
+          version = extractMySQLVersion(data);
+          socket.destroy();
+          resolve({
+            ...portInfo,
+            state: 'open',
+            responseTime: `${responseTime}ms`,
+            version,
+            details: `MySQL database: ${version || 'detected'}`
+          });
+        });
+        setTimeout(() => {
+          socket.destroy();
+          resolve({
+            ...portInfo,
+            state: 'open',
+            responseTime: `${responseTime}ms`,
+            details: 'MySQL service detected'
+          });
+        }, 1000);
+      } else {
+        // Generic open port
+        socket.destroy();
+        resolve({
+          ...portInfo,
+          state: 'open',
+          responseTime: `${responseTime}ms`,
+          details: `${portInfo.name} service detected`
+        });
+      }
+    });
+
+    socket.on('timeout', () => {
+      socket.destroy();
+      resolve({
+        ...portInfo,
+        state: 'filtered',
+        details: 'Port filtered (timeout)'
+      });
+    });
+
+    socket.on('error', (err) => {
+      socket.destroy();
+      if (err.code === 'ECONNREFUSED') {
+        resolve({
+          ...portInfo,
+          state: 'closed',
+          details: 'Connection refused'
+        });
+      } else if (err.code === 'ETIMEDOUT') {
+        resolve({
+          ...portInfo,
+          state: 'filtered',
+          details: 'Filtered by firewall'
+        });
+      } else {
+        resolve({
+          ...portInfo,
+          state: 'closed',
+          details: err.message
+        });
+      }
+    });
+
+    socket.connect(portInfo.port, domain);
+  });
+}
+
+/* ========== Version Extraction Functions ========== */
+
+function extractSSHVersion(banner) {
+  const match = banner.match(/SSH-([\d.]+)-(.+)/);
+  return match ? `OpenSSH ${match[2]} (protocol ${match[1]})` : 'SSH';
+}
+
+function extractFTPVersion(banner) {
+  const match = banner.match(/220[- ](.+)/);
+  return match ? match[1] : 'FTP';
+}
+
+function extractSMTPVersion(banner) {
+  const match = banner.match(/220[- ](.+)/);
+  return match ? match[1] : 'SMTP';
+}
+
+function extractHTTPVersion(banner) {
+  const serverMatch = banner.match(/Server: (.+)/i);
+  return serverMatch ? serverMatch[1] : 'HTTP';
+}
+
+function extractMySQLVersion(data) {
+  try {
+    const versionStart = 5;
+    const versionEnd = data.indexOf(0x00, versionStart);
+    if (versionEnd > versionStart) {
+      return data.slice(versionStart, versionEnd).toString();
+    }
+  } catch (e) {
+    return 'MySQL';
+  }
+  return 'MySQL';
+}
+
+function getPortRecommendation(port, name, risk) {
+  const recommendations = {
+    21: 'Replace FTP with SFTP or FTPS for encrypted file transfer',
+    22: 'Ensure SSH uses key-based authentication and disable password auth',
+    23: 'Close Telnet immediately and use SSH instead',
+    25: 'Configure SMTP authentication and implement SPF/DKIM/DMARC',
+    80: 'Redirect all HTTP traffic to HTTPS',
+    443: 'Ensure TLS 1.2+ is used with strong cipher suites',
+    3306: 'Restrict MySQL access to trusted IPs only',
+    3389: 'Use VPN or close RDP; implement NLA and strong passwords',
+    6379: 'Enable Redis authentication and bind to localhost only',
+    27017: 'Enable MongoDB authentication and restrict access'
+  };
+
+  return recommendations[port] || `Review security configuration for ${name} service`;
+}
+
+
+
 /* ========== Existing Service Detection (Extended) ========== */
 
 async function resolveHostFQDN(domain) {
@@ -1327,6 +1896,214 @@ async function detectServiceTechnology(domain, headers, htmlBody) {
   return detections;
 }
 
+/* ========== 🆕 DIRECTORY/FILE ENUMERATION (GOBUSTER-STYLE) ========== */
+
+async function enumerateDirectories(domain) {
+  const results = {
+    tested: false,
+    totalTested: 0,
+    foundPaths: [],
+    errors: [],
+    scanDuration: 0,
+    error: null, // Add error field for safety
+  };
+
+  // Expanded wordlist with common Next.js paths
+  const wordlist = [
+    // Admin & Auth
+    'admin',
+    'login',
+    'dashboard',
+    'api',
+    'signin',
+    'signup',
+    'register',
+    'auth',
+
+    // Config & Backup
+    'config',
+    'backup',
+    '.env',
+    '.env.local',
+    '.env.production',
+    '.git',
+    '.gitignore',
+    '.htaccess',
+    'web.config',
+    'config.php',
+    'config.json',
+    'package.json',
+    'composer.json',
+
+    // Common directories
+    'uploads',
+    'images',
+    'files',
+    'static',
+    'assets',
+    'public',
+    'js',
+    'css',
+    'vendor',
+    'node_modules',
+    '_next',
+    'api/auth',
+
+    // CMS paths
+    'wp-admin',
+    'wp-content',
+    'wp-includes',
+    'phpmyadmin',
+    'adminer',
+
+    // Database & logs
+    'database',
+    'db',
+    'sql',
+    'logs',
+    'cache',
+    'tmp',
+    'temp',
+    'debug',
+    'error.log',
+    'access.log',
+    'debug.log',
+
+    // Backup files
+    'backup.zip',
+    'backup.sql',
+    'database.sql',
+    'site.tar.gz',
+
+    // Development
+    'test',
+    'dev',
+    'staging',
+    'README.md',
+    'LICENSE',
+    'changelog.txt',
+
+    // API docs
+    'swagger',
+    'graphql',
+    'api/v1',
+    'api/v2',
+    'api/docs',
+    'api/swagger',
+    'docs',
+
+    // Monitoring
+    'metrics',
+    'health',
+    'status',
+    'ping',
+    'version',
+    'info',
+
+    // Common files
+    'robots.txt',
+    'sitemap.xml',
+    'favicon.ico',
+    'index.php',
+    'index.html',
+    'admin.php',
+    'login.php',
+    'setup.php',
+    'install.php',
+  ];
+
+  const startTime = Date.now();
+  results.totalTested = wordlist.length;
+  results.tested = true;
+
+  const agent = new https.Agent({ rejectUnauthorized: false });
+
+  try {
+    // Test paths in parallel (batch of 5 at a time to avoid rate limiting)
+    const batchSize = 5;
+
+    for (let i = 0; i < wordlist.length; i += batchSize) {
+      const batch = wordlist.slice(i, i + batchSize);
+
+      const promises = batch.map(async (path) => {
+        try {
+          const testUrl = `https://${domain}/${path}`;
+
+          const response = await axios.get(testUrl, {
+            timeout: 5000, // Increased timeout
+            httpsAgent: agent,
+            validateStatus: () => true, // Accept any status
+            maxRedirects: 0,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+          });
+
+          // Consider path "found" if status is:
+          // 200 (OK), 301/302 (Redirect), 403 (Forbidden - exists but blocked), 401 (Unauthorized - exists but needs auth)
+          const interestingStatus = [200, 301, 302, 401, 403];
+
+          if (interestingStatus.includes(response.status)) {
+            return {
+              path: `/${path}`,
+              url: testUrl,
+              statusCode: response.status,
+              statusText: getStatusText(response.status),
+              size: response.headers['content-length'] || 'unknown',
+              contentType: response.headers['content-type'] || 'unknown',
+              found: true,
+            };
+          }
+
+          return null;
+        } catch (error) {
+          // Only log non-404 errors
+          if (error.response && error.response.status !== 404) {
+            console.log(`Directory enum error for ${path}:`, error.message);
+          }
+          return null;
+        }
+      });
+
+      const batchResults = await Promise.all(promises);
+      const found = batchResults.filter((r) => r !== null);
+
+      if (found.length > 0) {
+        results.foundPaths.push(...found);
+        console.log(`[Directory Enum] Found ${found.length} paths in batch ${i / batchSize + 1}`);
+      }
+
+      // Small delay between batches to avoid overwhelming the server
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+  } catch (error) {
+    console.error('Directory enumeration critical error:', error.message);
+    results.error = error.message;
+  }
+
+  results.scanDuration = Date.now() - startTime;
+
+  console.log(`[Directory Enum] Complete: Found ${results.foundPaths.length} accessible paths from ${results.totalTested} tests in ${results.scanDuration}ms`);
+
+  return results;
+}
+
+// Helper function for status text
+function getStatusText(code) {
+  const statusTexts = {
+    200: 'OK',
+    301: 'Moved Permanently',
+    302: 'Found',
+    401: 'Unauthorized',
+    403: 'Forbidden',
+    404: 'Not Found',
+    500: 'Internal Server Error',
+  };
+  return statusTexts[code] || 'Unknown';
+}
+
+
+
 /* ========== MAIN SCAN FUNCTION WITH NEW FEATURES ========== */
 
 export const runScan = async (req, res) => {
@@ -1359,16 +2136,16 @@ export const runScan = async (req, res) => {
 
     // ✅ PHASE 1: RUN INITIAL CHECKS IN PARALLEL (5-8 seconds)
     console.log('[Scanner] Phase 1: SSL, Headers, Robots - Starting...');
-    const [sslResult, headersResult, robotsResult] = await Promise.allSettled([
-      // SSL Check
+    const [sslResult, headersResult, robotsResult, firewallResult, sessionResult, portScanResult] = await Promise.allSettled([
+      // Existing checks...
       sslChecker(domain).catch(err => ({ valid: false, error: err.message })),
 
-      // Headers Check
+      // Headers check...
       (async () => {
         const agent = new https.Agent({ rejectUnauthorized: false });
         const started = Date.now();
         const response = await axios.get(formattedUrl, {
-          timeout: 6000, // ✅ Reduced from 8000
+          timeout: 6000,
           httpsAgent: agent,
           validateStatus: () => true,
           maxRedirects: 0
@@ -1376,11 +2153,11 @@ export const runScan = async (req, res) => {
         return { response, timespan: Date.now() - started };
       })(),
 
-      // Robots.txt Check
+      // Robots check...
       (async () => {
         const agent = new https.Agent({ rejectUnauthorized: false });
         const resp = await axios.get(`https://${domain}/robots.txt`, {
-          timeout: 3000, // ✅ Reduced from 5000
+          timeout: 3000,
           httpsAgent: agent,
           validateStatus: () => true,
         });
@@ -1388,8 +2165,18 @@ export const runScan = async (req, res) => {
           return analyzeRobotsTxt(resp.data);
         }
         return { present: false, allowsAll: true, disallowRules: [], sitemaps: [] };
-      })()
+      })(),
+
+      // ✅ NEW: Firewall Detection
+      detectFirewall(domain),
+
+      // ✅ NEW: Session Management
+      testSessionManagement(domain),
+
+      // ✅ NEW: Port Scanning
+      scanPortsWithImpact(domain)
     ]);
+
 
     // Process SSL results (unchanged)
     if (sslResult.status === 'fulfilled') {
@@ -1722,10 +2509,68 @@ export const runScan = async (req, res) => {
       scanResults.robots = { present: false, allowsAll: true, disallowRules: [], sitemaps: [] };
     }
 
+    // ✅ Process Firewall Detection
+    if (firewallResult.status === 'fulfilled') {
+      scanResults.firewall = firewallResult.value;
+
+      if (firewallResult.value.detected) {
+        scanResults.vulnerabilities.push({
+          type: 'firewall_detected',
+          severity: 'info',
+          description: `${firewallResult.value.wafType || 'Firewall/WAF'} Detected`,
+          details: `Firewall type: ${firewallResult.value.wafType}, Confidence: ${firewallResult.value.confidence}`,
+          recommendation: `Firewall/WAF is protecting your application. Ensure it's properly configured.`,
+          wafDetails: firewallResult.value
+        });
+      } else {
+        scanResults.vulnerabilities.push({
+          type: 'no_firewall',
+          severity: 'medium',
+          description: 'No Firewall/WAF Detected',
+          details: 'No Web Application Firewall (WAF) detected protecting this application',
+          recommendation: 'Consider implementing a WAF (Cloudflare, AWS WAF, ModSecurity) to protect against common attacks'
+        });
+      }
+    }
+
+    // ✅ Process Session Management
+    if (sessionResult.status === 'fulfilled') {
+      scanResults.sessionManagement = sessionResult.value;
+
+      if (sessionResult.value.sessionCreated) {
+        sessionResult.value.securityIssues.forEach(issue => {
+          scanResults.vulnerabilities.push({
+            type: 'session_issue',
+            severity: issue.severity,
+            description: `Session Security: ${issue.issue}`,
+            details: `Cookie: ${issue.cookie} - ${issue.description}`,
+            recommendation: issue.recommendation
+          });
+        });
+      }
+    }
+
+    // ✅ Process Port Scanning
+    if (portScanResult.status === 'fulfilled') {
+      scanResults.portScan = portScanResult.value;
+
+      portScanResult.value.securityImpact.forEach(impact => {
+        scanResults.vulnerabilities.push({
+          type: 'open_port',
+          severity: impact.severity,
+          description: `Open Port: ${impact.service} (${impact.port})`,
+          details: impact.finding,
+          impact: impact.impact,
+          recommendation: impact.recommendation
+        });
+      });
+    }
+
+
     // ✅ PHASE 2: RUN HEAVY TASKS IN PARALLEL (20-30 seconds)
     console.log('[Scanner] Phase 2: Service Detection, Sitemap, 404, Web Mirror - Starting...');
 
-    const [serviceResult, sitemapResult, check404Result, webMirrorResult] = await Promise.allSettled([
+    const [serviceResult, sitemapResult, check404Result, webMirrorResult, directoryEnumResult] = await Promise.allSettled([
       // Service Detection
       detectServiceTechnology(domain, scanResults.headers || {}, htmlBody),
 
@@ -1737,15 +2582,13 @@ export const runScan = async (req, res) => {
           `https://${domain}/sitemap_index.xml`,
           ...(scanResults.robots?.sitemaps || [])
         ];
-
         for (const sitemapUrl of sitemapUrls) {
           try {
             const resp = await axios.get(sitemapUrl, {
-              timeout: 3000, // ✅ Reduced from 5000
+              timeout: 3000,
               httpsAgent: agent,
               validateStatus: () => true,
             });
-
             if (resp.status === 200 && resp.data) {
               const summary = await summarizeSitemap(resp.data);
               return { url: sitemapUrl, ...summary };
@@ -1758,13 +2601,16 @@ export const runScan = async (req, res) => {
       // 404 Check
       check404Handling(domain),
 
-      // ✅ Web Mirroring (optimized settings)
+      // Web Mirroring
       crawlWebsite(formattedUrl, {
-        maxPages: 30,      // ✅ Reduced from 50
-        maxDepth: 2,       // ✅ Reduced from 3
-        timeout: 8000,     // ✅ Reduced from 15000
+        maxPages: 30,
+        maxDepth: 2,
+        timeout: 8000,
         onlySubdomain: true
-      })
+      }),
+
+      // 🆕 Directory/File Enumeration (Gobuster-style)
+      enumerateDirectories(domain)
     ]);
 
     // Process Service Detection
@@ -1953,6 +2799,59 @@ export const runScan = async (req, res) => {
         error: webMirrorResult.reason?.message || 'Web mirroring failed',
         totalPages: 0,
         pages: []
+      };
+    }
+    // ✅ Process Directory Enumeration (Gobuster-style)
+    if (directoryEnumResult.status === 'fulfilled') {
+      scanResults.directoryEnumeration = directoryEnumResult.value;
+      console.log(`[Scanner] Directory enum complete: ${directoryEnumResult.value.foundPaths.length} paths found`);
+
+      if (directoryEnumResult.value.foundPaths.length > 0) {
+        scanResults.vulnerabilities.push({
+          type: 'directory_enumeration',
+          severity: 'info',
+          description: 'Directory and File Enumeration Complete',
+          details: `Discovered ${directoryEnumResult.value.foundPaths.length} accessible paths/files from ${directoryEnumResult.value.totalTested} tests`,
+          recommendation: 'Review exposed directories and files to ensure no sensitive data is accessible'
+        });
+
+        // Check for sensitive exposed files
+        const sensitiveFiles = ['.env', '.git', 'config.php', 'config.json', 'backup.zip', 'backup.sql', 'database.sql', '.htaccess', 'web.config'];
+        const exposedSensitiveFiles = directoryEnumResult.value.foundPaths.filter(path =>
+          sensitiveFiles.some(file => path.path.toLowerCase().includes(file.toLowerCase()))
+        );
+
+        if (exposedSensitiveFiles.length > 0) {
+          scanResults.vulnerabilities.push({
+            type: 'sensitive_files_exposed',
+            severity: 'critical',
+            description: 'Sensitive Files Exposed',
+            details: `Found ${exposedSensitiveFiles.length} potentially sensitive file(s): ${exposedSensitiveFiles.map(f => f.path).join(', ')}`,
+            recommendation: 'Remove or restrict access to sensitive configuration and backup files immediately'
+          });
+        }
+
+        // Check for admin panels
+        const adminPaths = directoryEnumResult.value.foundPaths.filter(path =>
+          ['admin', 'login', 'dashboard', 'phpmyadmin', 'wp-admin'].some(admin => path.path.toLowerCase().includes(admin))
+        );
+
+        if (adminPaths.length > 0) {
+          scanResults.vulnerabilities.push({
+            type: 'admin_panel_exposed',
+            severity: 'medium',
+            description: 'Administrative Interfaces Discovered',
+            details: `Found ${adminPaths.length} admin/login path(s): ${adminPaths.map(p => p.path).join(', ')}`,
+            recommendation: 'Ensure admin interfaces require strong authentication and are protected from brute-force attacks'
+          });
+        }
+      }
+    } else {
+      console.error('[Scanner] Directory enumeration failed:', directoryEnumResult.reason?.message);
+      scanResults.directoryEnumeration = {
+        tested: false,
+        error: directoryEnumResult.reason?.message || 'Directory enumeration failed',
+        foundPaths: []
       };
     }
 
